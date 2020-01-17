@@ -13,7 +13,7 @@ import (
 	"github.com/trustbloc/edge-core/pkg/storage"
 )
 
-// MockStoreProvider mock store provider.
+// Provider mock store provider.
 type Provider struct {
 	Store              *MockStore
 	ErrOpenStoreHandle error
