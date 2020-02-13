@@ -14,30 +14,80 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMemStore_OpenStore(t *testing.T) {
+const testStoreName = "teststore"
+
+func TestProvider_CreateStore(t *testing.T) {
 	provider := NewProvider()
 
-	newStore, err := provider.OpenStore("store1")
+	err := provider.CreateStore(testStoreName)
 	require.NoError(t, err)
-	require.IsType(t, &MemStore{}, newStore)
 }
 
-func TestMemStore_OpenExistingStore(t *testing.T) {
-	provider := NewProvider()
+func TestMemStore_OpenStore(t *testing.T) {
+	t.Run("Successfully open an existing store", func(t *testing.T) {
+		provider := NewProvider()
 
-	newStore, err := provider.OpenStore("store1")
-	require.NoError(t, err)
-	require.IsType(t, &MemStore{}, newStore)
+		err := provider.CreateStore(testStoreName)
+		require.NoError(t, err)
 
-	existingStore, err := provider.OpenStore("store1")
-	require.NoError(t, err)
-	require.Equal(t, newStore, existingStore)
+		newStore, err := provider.OpenStore(testStoreName)
+		require.NoError(t, err)
+		require.IsType(t, &MemStore{}, newStore)
+	})
+	t.Run("Attempt to open a non-existent store", func(t *testing.T) {
+		provider := NewProvider()
+
+		newStore, err := provider.OpenStore(testStoreName)
+		require.Nil(t, newStore)
+		require.Equal(t, storage.ErrStoreNotFound, err)
+	})
+}
+
+func TestProvider_CloseStore(t *testing.T) {
+	t.Run("Successfully close store", func(t *testing.T) {
+		provider := NewProvider()
+
+		err := provider.CreateStore(testStoreName)
+		require.NoError(t, err)
+
+		newStore, err := provider.OpenStore(testStoreName)
+		require.NoError(t, err)
+
+		err = newStore.Put("something", []byte("value"))
+		require.NoError(t, err)
+
+		err = provider.CreateStore("store2")
+		require.NoError(t, err)
+
+		_, err = provider.OpenStore("store2")
+		require.NoError(t, err)
+
+		err = provider.CloseStore(testStoreName)
+		require.NoError(t, err)
+
+		_, err = newStore.Get("something")
+		require.Equal(t, storage.ErrValueNotFound, err)
+
+		require.Equal(t, 1, len(provider.dbs))
+	})
+	t.Run("Attempt to close a non-existent store", func(t *testing.T) {
+		provider := NewProvider()
+
+		err := provider.CloseStore(testStoreName)
+		require.Equal(t, storage.ErrStoreNotFound, err)
+	})
 }
 
 func TestProvider_Close(t *testing.T) {
 	provider := NewProvider()
 
-	_, err := provider.OpenStore("store1")
+	err := provider.CreateStore(testStoreName)
+	require.NoError(t, err)
+
+	_, err = provider.OpenStore(testStoreName)
+	require.NoError(t, err)
+
+	err = provider.CreateStore("store2")
 	require.NoError(t, err)
 
 	_, err = provider.OpenStore("store2")
@@ -49,40 +99,23 @@ func TestProvider_Close(t *testing.T) {
 	require.Equal(t, 0, len(provider.dbs))
 }
 
-func TestProvider_CloseStore(t *testing.T) {
-	provider := NewProvider()
+func TestMemStore_Put(t *testing.T) {
+	store := MemStore{db: map[string][]byte{}}
 
-	newStore, err := provider.OpenStore("store1")
+	err := store.Put("someKey", []byte("someValue"))
 	require.NoError(t, err)
 
-	err = newStore.Put("something", []byte("value"))
-	require.NoError(t, err)
-
-	_, err = provider.OpenStore("store2")
-	require.NoError(t, err)
-
-	err = provider.CloseStore("store1")
-	require.NoError(t, err)
-
-	_, err = newStore.Get("something")
-	require.Equal(t, storage.ErrValueNotFound, err)
-
-	require.Equal(t, 1, len(provider.dbs))
-}
-
-func TestProvider_CloseStoreDoesNotExist(t *testing.T) {
-	provider := NewProvider()
-
-	err := provider.CloseStore("store1")
-	require.Equal(t, storage.ErrStoreNotFound, err)
+	value, exists := store.db["someKey"]
+	require.True(t, exists)
+	require.Equal(t, "someValue", string(value))
 }
 
 func TestMemStore_Get(t *testing.T) {
-	memStore := MemStore{db: make(map[string][]byte)}
+	store := MemStore{db: make(map[string][]byte)}
 
-	memStore.db["testKey"] = []byte("testValue")
+	store.db["testKey"] = []byte("testValue")
 
-	value, err := memStore.Get("testKey")
+	value, err := store.Get("testKey")
 	require.NoError(t, err)
 
 	require.Equal(t, []byte("testValue"), value)
