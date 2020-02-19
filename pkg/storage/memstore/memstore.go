@@ -6,7 +6,9 @@ SPDX-License-Identifier: Apache-2.0
 
 package memstore
 
-import "github.com/trustbloc/edge-core/pkg/storage"
+import (
+	"github.com/trustbloc/edge-core/pkg/storage"
+)
 
 // Provider represents an MemStore implementation of the storage.Provider interface
 type Provider struct {
@@ -18,22 +20,23 @@ func NewProvider() *Provider {
 	return &Provider{dbs: make(map[string]*MemStore)}
 }
 
-// OpenStore opens and returns a store for the given name.
-func (p *Provider) OpenStore(name string) (storage.Store, error) {
-	store, exists := p.dbs[name]
-	if !exists {
-		return p.newMemStore(name), nil
-	}
-
-	return store, nil
-}
-
-func (p *Provider) newMemStore(name string) *MemStore {
+// CreateStore creates a new store with the given name.
+func (p *Provider) CreateStore(name string) error {
 	store := MemStore{db: make(map[string][]byte)}
 
 	p.dbs[name] = &store
 
-	return &store
+	return nil
+}
+
+// OpenStore opens an existing store with the given name and returns it.
+func (p *Provider) OpenStore(name string) (storage.Store, error) {
+	store, exists := p.dbs[name]
+	if !exists {
+		return nil, storage.ErrStoreNotFound
+	}
+
+	return store, nil
 }
 
 // CloseStore closes a previously opened store.
@@ -67,15 +70,15 @@ type MemStore struct {
 }
 
 // Put stores the given key-value pair in the store.
-func (store *MemStore) Put(k string, v []byte) error {
-	store.db[k] = v
+func (m *MemStore) Put(k string, v []byte) error {
+	m.db[k] = v
 
 	return nil
 }
 
 // Get retrieves the value in the store associated with the given key.
-func (store *MemStore) Get(k string) ([]byte, error) {
-	v, exists := store.db[k]
+func (m *MemStore) Get(k string) ([]byte, error) {
+	v, exists := m.db[k]
 	if !exists {
 		return nil, storage.ErrValueNotFound
 	}
@@ -83,6 +86,6 @@ func (store *MemStore) Get(k string) ([]byte, error) {
 	return v, nil
 }
 
-func (store *MemStore) close() {
-	store.db = make(map[string][]byte)
+func (m *MemStore) close() {
+	m.db = make(map[string][]byte)
 }
