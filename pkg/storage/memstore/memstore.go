@@ -7,12 +7,15 @@ SPDX-License-Identifier: Apache-2.0
 package memstore
 
 import (
+	"sync"
+
 	"github.com/trustbloc/edge-core/pkg/storage"
 )
 
 // Provider represents an MemStore implementation of the storage.Provider interface
 type Provider struct {
 	dbs map[string]*MemStore
+	mux sync.RWMutex
 }
 
 // NewProvider instantiates Provider
@@ -22,6 +25,9 @@ func NewProvider() *Provider {
 
 // CreateStore creates a new store with the given name.
 func (p *Provider) CreateStore(name string) error {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+
 	store := MemStore{db: make(map[string][]byte)}
 
 	p.dbs[name] = &store
@@ -31,6 +37,9 @@ func (p *Provider) CreateStore(name string) error {
 
 // OpenStore opens an existing store with the given name and returns it.
 func (p *Provider) OpenStore(name string) (storage.Store, error) {
+	p.mux.RLock()
+	defer p.mux.RUnlock()
+
 	store, exists := p.dbs[name]
 	if !exists {
 		return nil, storage.ErrStoreNotFound
@@ -41,6 +50,9 @@ func (p *Provider) OpenStore(name string) (storage.Store, error) {
 
 // CloseStore closes a previously opened store.
 func (p *Provider) CloseStore(name string) error {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+
 	store, exists := p.dbs[name]
 	if !exists {
 		return storage.ErrStoreNotFound
@@ -55,6 +67,9 @@ func (p *Provider) CloseStore(name string) error {
 
 // Close closes the provider.
 func (p *Provider) Close() error {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+
 	for _, memStore := range p.dbs {
 		memStore.db = make(map[string][]byte)
 	}
@@ -66,11 +81,15 @@ func (p *Provider) Close() error {
 
 // MemStore is a simple DB that's stored in memory. Useful for demos or testing. Not designed to be performant.
 type MemStore struct {
-	db map[string][]byte
+	db  map[string][]byte
+	mux sync.RWMutex
 }
 
 // Put stores the given key-value pair in the store.
 func (m *MemStore) Put(k string, v []byte) error {
+	m.mux.Lock()
+	defer m.mux.Unlock()
+
 	m.db[k] = v
 
 	return nil
@@ -78,6 +97,9 @@ func (m *MemStore) Put(k string, v []byte) error {
 
 // Get retrieves the value in the store associated with the given key.
 func (m *MemStore) Get(k string) ([]byte, error) {
+	m.mux.RLock()
+	defer m.mux.RUnlock()
+
 	v, exists := m.db[k]
 	if !exists {
 		return nil, storage.ErrValueNotFound
@@ -87,5 +109,8 @@ func (m *MemStore) Get(k string) ([]byte, error) {
 }
 
 func (m *MemStore) close() {
+	m.mux.Lock()
+	defer m.mux.Unlock()
+
 	m.db = make(map[string][]byte)
 }
