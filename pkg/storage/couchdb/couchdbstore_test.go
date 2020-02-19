@@ -97,8 +97,7 @@ func TestProvider_CreateStore(t *testing.T) {
 		require.NoError(t, err)
 
 		err = provider.CreateStore(testStoreName)
-		require.Equal(t, "Precondition Failed: The database could not be created, the file already exists.",
-			err.Error())
+		require.Equal(t, storage.ErrDuplicateStore.Error(), err.Error())
 	})
 	t.Run("Attempt to create a store with an incompatible name", func(t *testing.T) {
 		provider := initializeTest(t)

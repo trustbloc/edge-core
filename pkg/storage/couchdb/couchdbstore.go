@@ -50,9 +50,14 @@ func NewProvider(hostURL string) (*Provider, error) {
 // CreateStore creates a new store with the given name.
 func (p *Provider) CreateStore(name string) error {
 	p.mux.Lock()
-	defer p.mux.Unlock()
 
 	err := p.couchDBClient.CreateDB(context.Background(), name)
+
+	p.mux.Unlock()
+
+	if err != nil && err.Error() == "Precondition Failed: The database could not be created, the file already exists." {
+		return storage.ErrDuplicateStore
+	}
 
 	return err
 }

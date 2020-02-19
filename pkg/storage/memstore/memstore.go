@@ -28,6 +28,11 @@ func (p *Provider) CreateStore(name string) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 
+	_, exists := p.dbs[name]
+	if exists {
+		return storage.ErrDuplicateStore
+	}
+
 	store := MemStore{db: make(map[string][]byte)}
 
 	p.dbs[name] = &store
