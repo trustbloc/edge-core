@@ -17,10 +17,21 @@ import (
 const testStoreName = "teststore"
 
 func TestProvider_CreateStore(t *testing.T) {
-	provider := NewProvider()
+	t.Run("Successfully create a new store", func(t *testing.T) {
+		provider := NewProvider()
 
-	err := provider.CreateStore(testStoreName)
-	require.NoError(t, err)
+		err := provider.CreateStore(testStoreName)
+		require.NoError(t, err)
+	})
+	t.Run("Attempt to create a duplicate store", func(t *testing.T) {
+		provider := NewProvider()
+
+		err := provider.CreateStore(testStoreName)
+		require.NoError(t, err)
+
+		err = provider.CreateStore(testStoreName)
+		require.Equal(t, storage.ErrDuplicateStore, err)
+	})
 }
 
 func TestMemStore_OpenStore(t *testing.T) {

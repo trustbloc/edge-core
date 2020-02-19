@@ -8,10 +8,13 @@ package storage
 
 import "errors"
 
+// ErrDuplicateStore is used when an attempt is made to create a duplicate store.
+var ErrDuplicateStore = errors.New("store already exists")
+
 // ErrStoreNotFound is used when a given store was not found in a provider.
 var ErrStoreNotFound = errors.New("store not found")
 
-// ErrValueNotFound is used when an attempt is made to retrieve a value from key
+// ErrValueNotFound is used when an attempt is made to retrieve a value using a key that isn't in the store.
 var ErrValueNotFound = errors.New("store does not have a value associated with this key")
 
 // Provider represents a storage provider.
