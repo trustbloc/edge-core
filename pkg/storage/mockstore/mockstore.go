@@ -16,6 +16,7 @@ import (
 // Provider mock store provider.
 type Provider struct {
 	Store              *MockStore
+	ErrCreateStore     error
 	ErrOpenStoreHandle error
 	FailNameSpace      string
 }
@@ -25,6 +26,11 @@ func NewMockStoreProvider() *Provider {
 	return &Provider{Store: &MockStore{
 		Store: make(map[string][]byte),
 	}}
+}
+
+// CreateStore creates a new store with the given name.
+func (p *Provider) CreateStore(name string) error {
+	return p.ErrCreateStore
 }
 
 // OpenStore opens and returns a store for given name space.
