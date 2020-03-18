@@ -150,7 +150,7 @@ func (c *CouchDBStore) Put(k string, v []byte) error {
 }
 
 func isJSON(textToCheck []byte) bool {
-	var js json.RawMessage
+	var js map[string]interface{}
 	return json.Unmarshal(textToCheck, &js) == nil
 }
 
