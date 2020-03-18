@@ -20,11 +20,13 @@ import (
 )
 
 const (
-	couchDBURL       = "localhost:5984"
-	testStoreName    = "teststore"
-	testDocKey       = "sampleDBKey"
-	testJSONValue    = `{"JSONKey":"JSONValue"}`
-	testNonJSONValue = "1"
+	couchDBURL        = "localhost:5984"
+	testStoreName     = "teststore"
+	testDocKey        = "sampleDBKey"
+	testJSONValue     = `{"JSONKey":"JSONValue"}`
+	testJSONValue1    = `{"JSONKey":"JSONValue1"}`
+	testNonJSONValue  = "1"
+	testNonJSONValue1 = "2"
 )
 
 // For these unit tests to run, you must ensure you have a CouchDB instance running at the URL specified in couchDBURL.
@@ -208,6 +210,13 @@ func TestCouchDBStore_Get(t *testing.T) {
 		value, err := store.Get(testDocKey)
 		require.NoError(t, err)
 		require.Equal(t, testJSONValue, string(value))
+
+		err = store.Put(testDocKey, []byte(testJSONValue1))
+		require.NoError(t, err)
+
+		value, err = store.Get(testDocKey)
+		require.NoError(t, err)
+		require.Equal(t, testJSONValue1, string(value))
 	})
 	t.Run("Document found, original data was not JSON and so was saved as a CouchDB attachment."+
 		" Original data is still preserved", func(t *testing.T) {
@@ -221,6 +230,13 @@ func TestCouchDBStore_Get(t *testing.T) {
 		value, err := store.Get(testDocKey)
 		require.NoError(t, err)
 		require.Equal(t, testNonJSONValue, string(value))
+
+		err = store.Put(testDocKey, []byte(testNonJSONValue1))
+		require.NoError(t, err)
+
+		value, err = store.Get(testDocKey)
+		require.NoError(t, err)
+		require.Equal(t, testNonJSONValue1, string(value))
 	})
 	t.Run("Document not found", func(t *testing.T) {
 		provider := initializeTest(t)
