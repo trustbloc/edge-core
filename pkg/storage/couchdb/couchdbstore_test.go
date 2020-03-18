@@ -24,7 +24,7 @@ const (
 	testStoreName    = "teststore"
 	testDocKey       = "sampleDBKey"
 	testJSONValue    = `{"JSONKey":"JSONValue"}`
-	testNonJSONValue = "Some arbitrary data"
+	testNonJSONValue = "1"
 )
 
 // For these unit tests to run, you must ensure you have a CouchDB instance running at the URL specified in couchDBURL.
