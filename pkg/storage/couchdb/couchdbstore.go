@@ -90,7 +90,7 @@ func (p *Provider) OpenStore(name string) (storage.Store, error) {
 		return nil, dbErr
 	}
 
-	store := &CouchDBStore{db: db}
+	store := &CouchDBStore{db: db, revIDs: make(map[string]string)}
 
 	p.dbs[name] = store
 
@@ -130,6 +130,8 @@ func (p *Provider) Close() error {
 // CouchDBStore represents a CouchDB-backed database.
 type CouchDBStore struct {
 	db *kivik.DB
+	// TODO change to leveldb https://github.com/trustbloc/edge-core/issues/17
+	revIDs map[string]string
 }
 
 // Put stores the given key-value pair in the store.
@@ -141,10 +143,28 @@ func (c *CouchDBStore) Put(k string, v []byte) error {
 		valueToPut = wrapTextAsCouchDBAttachment(v)
 	}
 
-	_, err := c.db.Put(context.Background(), k, valueToPut)
+	if c.revIDs[k] != "" {
+		var m map[string]interface{}
+		if err := json.Unmarshal(valueToPut, &m); err != nil {
+			return fmt.Errorf("failed to unmarshal put value: %w", err)
+		}
+
+		m["_rev"] = c.revIDs[k]
+
+		var err error
+		valueToPut, err = json.Marshal(m)
+
+		if err != nil {
+			return fmt.Errorf("failed to marshal put value: %w", err)
+		}
+	}
+
+	rev, err := c.db.Put(context.Background(), k, valueToPut)
 	if err != nil {
 		return err
 	}
+
+	c.revIDs[k] = rev
 
 	return nil
 }
