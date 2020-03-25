@@ -131,3 +131,16 @@ func TestMemStore_Get(t *testing.T) {
 
 	require.Equal(t, []byte("testValue"), value)
 }
+
+func TestMemStore_CreateIndex(t *testing.T) {
+	memStore := &MemStore{}
+	err := memStore.CreateIndex(storage.CreateIndexRequest{})
+	require.Equal(t, errIndexingNotSupported, err)
+}
+
+func TestMemStore_Query(t *testing.T) {
+	memStore := &MemStore{}
+	itr, err := memStore.Query("")
+	require.Equal(t, errQueryingNotSupported, err)
+	require.Nil(t, itr)
+}
