@@ -15,6 +15,7 @@ require (
 	github.com/gopherjs/gopherjs v0.0.0-20200209183636-89e6cbcd0b6d // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/sirupsen/logrus v1.4.2
+	github.com/spf13/cobra v0.0.6
 	github.com/stretchr/testify v1.4.0
 	gitlab.com/flimzy/testy v0.0.2 // indirect
 	golang.org/x/net v0.0.0-20200202094626-16171245cfb2 // indirect
