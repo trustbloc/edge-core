@@ -12,10 +12,12 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"strconv"
 	"sync"
 
 	_ "github.com/go-kivik/couchdb" // The CouchDB driver
 	"github.com/go-kivik/kivik"
+	"github.com/sirupsen/logrus"
 
 	"github.com/trustbloc/edge-core/pkg/storage"
 )
@@ -183,11 +185,11 @@ func wrapTextAsCouchDBAttachment(textToWrap []byte) []byte {
 
 // Get retrieves the value in the store associated with the given key.
 func (c *CouchDBStore) Get(k string) ([]byte, error) {
-	destinationData := make(map[string]interface{})
+	rawDoc := make(map[string]interface{})
 
 	row := c.db.Get(context.Background(), k)
 
-	err := row.ScanDoc(&destinationData)
+	err := row.ScanDoc(&rawDoc)
 	if err != nil {
 		if err.Error() == "Not Found: missing" {
 			return nil, storage.ErrValueNotFound
@@ -196,16 +198,95 @@ func (c *CouchDBStore) Get(k string) ([]byte, error) {
 		return nil, err
 	}
 
-	_, containsAttachment := destinationData["_attachments"]
+	return c.getStoredValueFromRawDoc(rawDoc, k)
+}
+
+// CreateIndex creates an index based on the provided CreateIndexRequest.
+// createIndexRequest.IndexStorageLocation refers to the design doc that the index should get placed in.
+// createIndexRequest.IndexName is the name for the index that will be stored in CouchDB.
+// createIndexRequest.WhatToIndex must be a valid index object as defined here:
+//   http://docs.couchdb.org/en/stable/api/database/find.html#db-index
+func (c *CouchDBStore) CreateIndex(createIndexRequest storage.CreateIndexRequest) error {
+	return c.db.CreateIndex(context.Background(), createIndexRequest.IndexStorageLocation,
+		createIndexRequest.IndexName, createIndexRequest.WhatToIndex)
+}
+
+// Query executes a query using the CouchDB _find endpoint.
+func (c *CouchDBStore) Query(findQuery string) (storage.ResultsIterator, error) {
+	resultRows, err := c.db.Find(context.Background(), findQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	return &couchDBResultsIterator{store: c, resultRows: resultRows}, nil
+}
+
+type couchDBResultsIterator struct {
+	store      *CouchDBStore
+	resultRows *kivik.Rows
+}
+
+// Next moves the pointer to the next value in the iterator. It returns false if the iterator is exhausted.
+// Note that the Kivik library automatically closes the kivik.Rows iterator if the iterator is exhaused.
+func (i *couchDBResultsIterator) Next() (bool, error) {
+	nextCallResult := i.resultRows.Next()
+
+	// Kivik only guarantees that this value will be set after all the rows have been iterated through.
+	warningMsg := i.resultRows.Warning()
+
+	if warningMsg != "" {
+		logrus.Warn(warningMsg)
+	}
+
+	return nextCallResult, i.resultRows.Err()
+}
+
+// Release releases associated resources. Release should always result in success
+// and can be called multiple times without causing an error.
+func (i *couchDBResultsIterator) Release() error {
+	return i.resultRows.Close()
+}
+
+// Key returns the key of the current key-value pair.
+func (i *couchDBResultsIterator) Key() (string, error) {
+	key := i.resultRows.Key()
+	if key != "" {
+		// The returned key is a raw JSON string. It needs to be unescaped:
+		return strconv.Unquote(key)
+	}
+
+	return key, nil
+}
+
+// Value returns the value of the current key-value pair.
+func (i *couchDBResultsIterator) Value() ([]byte, error) {
+	rawDoc := make(map[string]interface{})
+
+	err := i.resultRows.ScanDoc(&rawDoc)
+
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := i.Key()
+	if err != nil {
+		return nil, err
+	}
+
+	return i.store.getStoredValueFromRawDoc(rawDoc, key)
+}
+
+func (c *CouchDBStore) getStoredValueFromRawDoc(rawDoc map[string]interface{}, k string) ([]byte, error) {
+	_, containsAttachment := rawDoc["_attachments"]
 	if containsAttachment {
 		return c.getDataFromAttachment(k)
 	}
 
-	// Stripping out the CouchDB-specific fields
-	delete(destinationData, "_id")
-	delete(destinationData, "_rev")
+	// Strip out the CouchDB-specific fields
+	delete(rawDoc, "_id")
+	delete(rawDoc, "_rev")
 
-	strippedJSON, err := json.Marshal(destinationData)
+	strippedJSON, err := json.Marshal(rawDoc)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +295,6 @@ func (c *CouchDBStore) Get(k string) ([]byte, error) {
 }
 
 func (c *CouchDBStore) getDataFromAttachment(k string) ([]byte, error) {
-	// Original data was not JSON and so it was stored as an attachment
 	attachment, err := c.db.GetAttachment(context.Background(), k, "data")
 	if err != nil {
 		return nil, err

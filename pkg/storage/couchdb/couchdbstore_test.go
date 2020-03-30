@@ -6,6 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 package couchdbstore
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -15,18 +16,23 @@ import (
 	"github.com/trustbloc/edge-core/pkg/storage"
 
 	"github.com/go-kivik/kivik"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
 const (
-	couchDBURL        = "localhost:5984"
-	testStoreName     = "teststore"
-	testDocKey        = "sampleDBKey"
-	testJSONValue     = `{"JSONKey":"JSONValue"}`
-	testJSONValue1    = `{"JSONKey":"JSONValue1"}`
-	testNonJSONValue  = "1"
-	testNonJSONValue1 = "2"
+	couchDBURL                 = "localhost:5984"
+	testStoreName              = "teststore"
+	testDocKey                 = "sampleDBKey"
+	testDocKey2                = "sampleDBKey2"
+	testJSONValue              = `{"JSONKey":"JSONValue"}`
+	testJSONValue1             = `{"JSONKey1":"JSONValue1"}`
+	testJSONValue2             = `{"JSONKey2":"JSONValue2"}`
+	testJSONWithMultipleFields = `{"employeeID":1234,"name":"Mr. Trustbloc"}`
+	testNonJSONValue           = "1"
+	testNonJSONValue1          = "2"
+	testIndexName              = "TestIndex"
+	testDesignDoc              = "TestDesignDoc"
 )
 
 // For these unit tests to run, you must ensure you have a CouchDB instance running at the URL specified in couchDBURL.
@@ -36,7 +42,7 @@ const (
 func TestMain(m *testing.M) {
 	err := waitForCouchDBToStart()
 	if err != nil {
-		logrus.Errorf(err.Error() +
+		log.Errorf(err.Error() +
 			". Make sure you start a couchDB instance using" +
 			" 'docker run -p 5984:5984 couchdb:2.3.1' before running the unit tests")
 		os.Exit(1)
@@ -184,7 +190,7 @@ func TestCouchDBStore_Put(t *testing.T) {
 
 		store := createAndOpenTestStore(t, provider)
 
-		err := store.Put(testDocKey, []byte(testJSONValue))
+		err := store.Put(testDocKey, []byte(testJSONValue1))
 		require.NoError(t, err)
 	})
 
@@ -268,12 +274,204 @@ func TestCouchDBStore_getDataFromAttachment(t *testing.T) {
 
 		_ = createAndOpenTestStore(t, provider)
 
-		_, err := provider.dbs[testStoreName].db.Put(context.Background(), testDocKey, []byte(testJSONValue))
+		_, err := provider.dbs[testStoreName].db.Put(context.Background(), testDocKey, []byte(testJSONValue1))
 		require.NoError(t, err)
 
 		data, err := provider.dbs[testStoreName].getDataFromAttachment(testDocKey)
 		require.Nil(t, data)
 		require.Equal(t, "Not Found: Document is missing attachment", err.Error())
+	})
+}
+
+func TestCouchDBStore_CreateIndex(t *testing.T) {
+	t.Run("Successfully create index", func(t *testing.T) {
+		provider := initializeTest(t)
+		store := createAndOpenTestStore(t, provider)
+
+		err := createIndex(store, `{"fields": ["SomeField"]}`)
+		require.NoError(t, err)
+
+		couchDBStore, ok := store.(*CouchDBStore)
+		require.True(t, ok)
+
+		indexes, err := couchDBStore.db.GetIndexes(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, testIndexName, indexes[1].Name)
+	})
+	t.Run("Fail to create index - invalid index request", func(t *testing.T) {
+		provider := initializeTest(t)
+		store := createAndOpenTestStore(t, provider)
+
+		err := createIndex(store, `{"fields": [""]}`)
+		require.EqualError(t, err, "Bad Request: Invalid sort field: <<>>")
+	})
+}
+
+func TestCouchDBStore_Query(t *testing.T) {
+	t.Run("Successfully query using index", func(t *testing.T) {
+		provider := initializeTest(t)
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey, []byte(testJSONWithMultipleFields))
+		require.NoError(t, err)
+
+		err = createIndex(store, `{"fields": ["employeeID"]}`)
+		require.NoError(t, err)
+
+		var logContents bytes.Buffer
+		log.SetOutput(&logContents)
+
+		itr, err := store.Query(`{
+		   "selector": {
+		       "employeeID": 1234
+		   },
+			"use_index": ["` + testDesignDoc + `", "` + testIndexName + `"]
+		}`)
+		require.NoError(t, err)
+
+		ok, err := itr.Next()
+		require.NoError(t, err)
+		require.True(t, ok)
+
+		value, err := itr.Value()
+		require.NoError(t, err)
+		require.Equal(t, testJSONWithMultipleFields, string(value))
+
+		ok, err = itr.Next()
+		require.NoError(t, err)
+		require.False(t, ok)
+
+		// Check to make sure an "index not used" warning didn't get logged
+		require.Empty(t, logContents.String())
+
+		err = itr.Release()
+		require.NoError(t, err)
+	})
+	t.Run("Successfully query using index, but the index isn't used because it's not valid for the query",
+		func(t *testing.T) {
+			provider := initializeTest(t)
+			store := createAndOpenTestStore(t, provider)
+
+			err := store.Put(testDocKey, []byte(testJSONWithMultipleFields))
+			require.NoError(t, err)
+
+			err = createIndex(store, `{"fields": ["name"]}`)
+			require.NoError(t, err)
+
+			var logContents bytes.Buffer
+			log.SetOutput(&logContents)
+
+			itr, err := store.Query(`{
+		   "selector": {
+		       "employeeID": 1234
+		   },
+			"use_index": ["` + testDesignDoc + `", "` + testIndexName + `"]
+		}`)
+			require.NoError(t, err)
+
+			ok, err := itr.Next()
+			require.NoError(t, err)
+			require.True(t, ok)
+
+			require.NoError(t, err)
+			value, err := itr.Value()
+			require.NoError(t, err)
+			require.Equal(t, testJSONWithMultipleFields, string(value))
+
+			ok, err = itr.Next()
+			require.NoError(t, err)
+			require.False(t, ok)
+
+			// Confirm that an "index not used" warning got logged
+			// Note that Kivik only sets the warning valueafter all the rows have been iterated through.
+			require.Contains(t, logContents.String(), "_design/"+testDesignDoc+", "+testIndexName+" was not used because "+
+				"it is not a valid index for this query.")
+			err = itr.Release()
+			require.NoError(t, err)
+		})
+	t.Run("Fail to query - invalid query JSON", func(t *testing.T) {
+		provider := initializeTest(t)
+		store := createAndOpenTestStore(t, provider)
+
+		itr, err := store.Query(``)
+		require.EqualError(t, err, "Bad Request: invalid UTF-8 JSON")
+		require.Nil(t, itr)
+	})
+}
+
+func TestCouchDBStore_ResultsIterator(t *testing.T) {
+	t.Run("Successfully iterate over all documents", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		rawData := make(map[string][]byte)
+		rawData[testDocKey] = []byte(testJSONValue)
+		rawData[testDocKey2] = []byte(testJSONValue2)
+		rawData["key3"] = []byte("This value will be stored as an attachment, as opposed to the two values above. " +
+			"This will allow both cases to be tested here.")
+
+		for k, v := range rawData {
+			err := store.Put(k, v)
+			require.NoError(t, err)
+		}
+
+		couchDBStore, ok := store.(*CouchDBStore)
+		require.True(t, ok)
+
+		rows, err := couchDBStore.db.AllDocs(context.Background(), kivik.Options{"include_docs": true})
+		require.NoError(t, err)
+
+		itr := couchDBResultsIterator{resultRows: rows, store: couchDBStore}
+
+		nextOK, nextErr := itr.Next()
+		require.NoError(t, nextErr)
+		count := 1
+		for nextOK {
+			key, keyErr := itr.Key()
+			require.NoError(t, keyErr)
+			val, ok := rawData[key]
+			require.True(t, ok)
+			itrValue, valueErr := itr.Value()
+			require.NoError(t, valueErr)
+			require.Equal(t, val, itrValue)
+			nextOK, nextErr = itr.Next()
+			if count == 3 {
+				require.NoError(t, nextErr)
+				require.False(t, nextOK)
+			} else {
+				require.NoError(t, nextErr)
+				require.True(t, ok)
+				count++
+			}
+		}
+		require.Equal(t, len(rawData), count)
+
+		err = itr.Release()
+		require.NoError(t, err)
+	})
+	t.Run("No data in iterator", func(t *testing.T) {
+		provider := initializeTest(t)
+		store := createAndOpenTestStore(t, provider)
+
+		couchDBStore, ok := store.(*CouchDBStore)
+		require.True(t, ok)
+
+		rows, err := couchDBStore.db.AllDocs(context.Background(), kivik.Options{"include_docs": true})
+		require.NoError(t, err)
+
+		itr := couchDBResultsIterator{resultRows: rows, store: couchDBStore}
+
+		ok, err = itr.Next()
+		require.NoError(t, err)
+		require.False(t, ok)
+		// Kivik closes its iterator automatically when its exhausted.
+		// When calling itr.Value(), we should expect an error telling us that it's already closed.
+		value, err := itr.Value()
+		require.EqualError(t, err, "kivik: Iterator is closed")
+		require.Nil(t, value)
+		err = itr.Release()
+		require.NoError(t, err)
 	})
 }
 
@@ -304,4 +502,14 @@ func createAndOpenTestStore(t *testing.T, provider *Provider) storage.Store {
 	require.NoError(t, err)
 
 	return newStore
+}
+
+func createIndex(store storage.Store, whatToIndex string) error {
+	createIndexRequest := storage.CreateIndexRequest{
+		IndexStorageLocation: testDesignDoc,
+		IndexName:            testIndexName,
+		WhatToIndex:          whatToIndex,
+	}
+
+	return store.CreateIndex(createIndexRequest)
 }

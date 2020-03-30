@@ -52,16 +52,18 @@ func (p *Provider) CloseStore(name string) error {
 	return nil
 }
 
-// MockStore mock store.
+// MockStore represents a mock store.
 type MockStore struct {
-	Store  map[string][]byte
-	lock   sync.RWMutex
-	ErrPut error
-	ErrGet error
-	ErrItr error
+	Store                   map[string][]byte
+	lock                    sync.RWMutex
+	ErrPut                  error
+	ErrGet                  error
+	ErrCreateIndex          error
+	ErrQuery                error
+	ResultsIteratorToReturn storage.ResultsIterator
 }
 
-// Put stores the key and the record
+// Put stores the key-value pair
 func (s *MockStore) Put(k string, v []byte) error {
 	if k == "" {
 		return errors.New("key is mandatory")
@@ -74,7 +76,7 @@ func (s *MockStore) Put(k string, v []byte) error {
 	return s.ErrPut
 }
 
-// Get fetches the record based on key
+// Get fetches the value associated with the given key
 func (s *MockStore) Get(k string) ([]byte, error) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
@@ -87,57 +89,12 @@ func (s *MockStore) Get(k string) ([]byte, error) {
 	return val, s.ErrGet
 }
 
-// MockIterator is the mock implementation of storage iterator
-type MockIterator struct {
-	currentIndex int
-	currentItem  []string
-	items        [][]string
-	err          error
+// CreateIndex returns a mocked error.
+func (s *MockStore) CreateIndex(createIndexRequest storage.CreateIndexRequest) error {
+	return s.ErrCreateIndex
 }
 
-func (s *MockIterator) isExhausted() bool {
-	return len(s.items) == 0 || len(s.items) == s.currentIndex
-}
-
-// Next moves pointer to next value of iterator.
-// It returns false if the iterator is exhausted.
-func (s *MockIterator) Next() bool {
-	if s.isExhausted() {
-		return false
-	}
-
-	s.currentItem = s.items[s.currentIndex]
-	s.currentIndex++
-
-	return true
-}
-
-// Release releases associated resources.
-func (s *MockIterator) Release() {
-	s.currentIndex = 0
-	s.items = make([][]string, 0)
-	s.currentItem = make([]string, 0)
-}
-
-// Error returns error in iterator.
-func (s *MockIterator) Error() error {
-	return s.err
-}
-
-// Key returns the key of the current key/value pair.
-func (s *MockIterator) Key() []byte {
-	if len(s.items) == 0 || len(s.currentItem) == 0 {
-		return nil
-	}
-
-	return []byte(s.currentItem[0])
-}
-
-// Value returns the value of the current key/value pair.
-func (s *MockIterator) Value() []byte {
-	if len(s.items) == 0 || len(s.currentItem) < 1 {
-		return nil
-	}
-
-	return []byte(s.currentItem[1])
+// Query returns a mocked error.
+func (s *MockStore) Query(query string) (storage.ResultsIterator, error) {
+	return s.ResultsIteratorToReturn, s.ErrQuery
 }
