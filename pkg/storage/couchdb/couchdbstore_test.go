@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trustbloc/edge-core/pkg/storage"
-
 	"github.com/go-kivik/kivik"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+
+	"github.com/trustbloc/edge-core/pkg/storage"
 )
 
 const (
@@ -160,7 +160,7 @@ func TestProvider_OpenStore(t *testing.T) {
 
 func TestProvider_CloseStore(t *testing.T) {
 	t.Run("Successfully close a store", func(t *testing.T) {
-		provider := initializeTest(t)
+		provider := initializeTest(t, WithDBPrefix("prefixdb"))
 
 		_ = createAndOpenTestStore(t, provider)
 
@@ -475,8 +475,8 @@ func TestCouchDBStore_ResultsIterator(t *testing.T) {
 	})
 }
 
-func initializeTest(t *testing.T) *Provider {
-	provider, err := NewProvider(couchDBURL)
+func initializeTest(t *testing.T, opts ...Option) *Provider {
+	provider, err := NewProvider(couchDBURL, opts...)
 	require.NoError(t, err)
 
 	resetCouchDB(t, provider)

@@ -23,22 +23,33 @@ import (
 	"github.com/trustbloc/edge-core/pkg/storage"
 )
 
-// Provider represents an CouchDB implementation of the storage.Provider interface
-type Provider struct {
-	hostURL       string
-	couchDBClient *kivik.Client
-	dbs           map[string]*CouchDBStore
-	mux           sync.RWMutex
-}
-
 const (
 	blankHostErrMsg           = "hostURL for new CouchDB provider can't be blank"
 	failToCloseProviderErrMsg = "failed to close provider"
 	couchDBNotFoundErr        = "Not Found:"
 )
 
+// Option configures the couchdb provider
+type Option func(opts *Provider)
+
+// WithDBPrefix option is for adding prefix to db name
+func WithDBPrefix(dbPrefix string) Option {
+	return func(opts *Provider) {
+		opts.dbPrefix = dbPrefix
+	}
+}
+
+// Provider represents an CouchDB implementation of the storage.Provider interface
+type Provider struct {
+	hostURL       string
+	couchDBClient *kivik.Client
+	dbs           map[string]*CouchDBStore
+	dbPrefix      string
+	mux           sync.RWMutex
+}
+
 // NewProvider instantiates Provider
-func NewProvider(hostURL string) (*Provider, error) {
+func NewProvider(hostURL string, opts ...Option) (*Provider, error) {
 	if hostURL == "" {
 		return nil, errors.New(blankHostErrMsg)
 	}
@@ -48,12 +59,22 @@ func NewProvider(hostURL string) (*Provider, error) {
 		return nil, err
 	}
 
-	return &Provider{hostURL: hostURL, couchDBClient: client, dbs: map[string]*CouchDBStore{}}, nil
+	p := &Provider{hostURL: hostURL, couchDBClient: client, dbs: map[string]*CouchDBStore{}}
+
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p, nil
 }
 
 // CreateStore creates a new store with the given name.
 func (p *Provider) CreateStore(name string) error {
 	p.mux.Lock()
+
+	if p.dbPrefix != "" {
+		name = p.dbPrefix + "_" + name
+	}
 
 	err := p.couchDBClient.CreateDB(context.Background(), name)
 
@@ -70,6 +91,10 @@ func (p *Provider) CreateStore(name string) error {
 func (p *Provider) OpenStore(name string) (storage.Store, error) {
 	p.mux.Lock()
 	defer p.mux.Unlock()
+
+	if p.dbPrefix != "" {
+		name = p.dbPrefix + "_" + name
+	}
 
 	// Check cache first
 	cachedStore, existsInCache := p.dbs[name]
@@ -105,6 +130,10 @@ func (p *Provider) OpenStore(name string) (storage.Store, error) {
 func (p *Provider) CloseStore(name string) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
+
+	if p.dbPrefix != "" {
+		name = p.dbPrefix + "_" + name
+	}
 
 	store, exists := p.dbs[name]
 	if !exists {
