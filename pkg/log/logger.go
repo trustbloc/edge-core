@@ -97,6 +97,23 @@ func GetLevel(module string) Level {
 	return Level(metadata.GetLevel(module))
 }
 
+// GetAllLevels - getting all set log levels
+//  Returns:
+//  module names and their associated logging levels
+//
+// If not set default logging level is info
+func GetAllLevels() map[string]Level {
+	metadataLevels := metadata.GetAllLevels()
+
+	// Convert to the Level type in this package
+	levels := make(map[string]Level)
+	for module, logLevel := range metadataLevels {
+		levels[module] = Level(logLevel)
+	}
+
+	return levels
+}
+
 // IsEnabledFor - Check if given log level is enabled for given module
 //  Parameters:
 //  module is module name
@@ -119,6 +136,16 @@ func IsEnabledFor(module string, level Level) bool {
 func ParseLevel(level string) (Level, error) {
 	l, err := metadata.ParseLevel(level)
 	return Level(l), err
+}
+
+// ParseString returns string representation of given log level
+//  Parameters:
+//  level is logging level represented as an int
+//
+//  Returns:
+//  logging level in string representation
+func ParseString(level Level) string {
+	return metadata.ParseString(metadata.Level(level))
 }
 
 // ShowCallerInfo - Show caller info in log lines for given log level and module

@@ -62,6 +62,18 @@ func TestAllLevels(t *testing.T) {
 	verifyLevels(t, module, []Level{CRITICAL, ERROR, WARNING, INFO, DEBUG}, []Level{})
 }
 
+func TestGetAllLevels(t *testing.T) {
+	sampleModuleCritical := "sample-module-critical"
+	SetLevel(sampleModuleCritical, CRITICAL)
+
+	sampleModuleWarning := "sample-module-warning"
+	SetLevel(sampleModuleWarning, WARNING)
+
+	allLogLevels := GetAllLevels()
+	require.Equal(t, Level(0), allLogLevels[sampleModuleCritical])
+	require.Equal(t, Level(2), allLogLevels[sampleModuleWarning])
+}
+
 // TestCallerInfos callerinfo behavior which displays caller function details in log lines
 // CallerInfo is available in default logger.
 // Based on implementation it may not be available for custom logger
@@ -108,6 +120,23 @@ func TestParseLevelError(t *testing.T) {
 	}
 
 	verifyLevelError("", "D", "DE BUG", ".")
+}
+
+func TestParseString(t *testing.T) {
+	criticalLogLevel := ParseString(CRITICAL)
+	require.Equal(t, "CRITICAL", criticalLogLevel)
+
+	errorLogLevel := ParseString(ERROR)
+	require.Equal(t, "ERROR", errorLogLevel)
+
+	warningLogLevel := ParseString(WARNING)
+	require.Equal(t, "WARNING", warningLogLevel)
+
+	infoLogLevel := ParseString(INFO)
+	require.Equal(t, "INFO", infoLogLevel)
+
+	debugLogLevel := ParseString(DEBUG)
+	require.Equal(t, "DEBUG", debugLogLevel)
 }
 
 func verifyLevels(t *testing.T, module string, enabled, disabled []Level) {

@@ -49,6 +49,16 @@ func (l *moduleLevels) GetLevel(module string) Level {
 	return level
 }
 
+// GetAllLevels returns all set log levels.
+func (l *moduleLevels) GetAllLevels() map[string]Level {
+	levelsCopy := make(map[string]Level)
+	for module, logLevel := range l.levels {
+		levelsCopy[module] = logLevel
+	}
+
+	return levelsCopy
+}
+
 // SetLevel sets the log level for given module and level.
 func (l *moduleLevels) SetLevel(module string, level Level) {
 	l.levels[module] = level
