@@ -32,6 +32,14 @@ func GetLevel(module string) Level {
 	return levels.GetLevel(module)
 }
 
+// GetAllLevels - getting all set log levels
+func GetAllLevels() map[string]Level {
+	rwmutex.RLock()
+	defer rwmutex.RUnlock()
+
+	return levels.GetAllLevels()
+}
+
 // IsEnabledFor - Check if given log level is enabled for given module
 func IsEnabledFor(module string, level Level) bool {
 	rwmutex.RLock()

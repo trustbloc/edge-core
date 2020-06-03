@@ -41,6 +41,18 @@ func TestLevels(t *testing.T) {
 	verifyLevels(t, module, []Level{CRITICAL, ERROR, WARNING, INFO, DEBUG}, []Level{})
 }
 
+func TestGetAllLevels(t *testing.T) {
+	sampleModuleCritical := "sample-module-critical"
+	SetLevel(sampleModuleCritical, CRITICAL)
+
+	sampleModuleWarning := "sample-module-warning"
+	SetLevel(sampleModuleWarning, WARNING)
+
+	allLogLevels := GetAllLevels()
+	require.Equal(t, Level(0), allLogLevels[sampleModuleCritical])
+	require.Equal(t, Level(2), allLogLevels[sampleModuleWarning])
+}
+
 func TestCallerInfos(t *testing.T) {
 	module := fmt.Sprintf("sample-module-caller-info-%d-%d", rand.Intn(1000), rand.Intn(1000))
 
