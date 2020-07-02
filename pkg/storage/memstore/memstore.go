@@ -7,14 +7,10 @@ SPDX-License-Identifier: Apache-2.0
 package memstore
 
 import (
-	"errors"
 	"sync"
 
 	"github.com/trustbloc/edge-core/pkg/storage"
 )
-
-var errIndexingNotSupported = errors.New("indexing is not supported in memstore")
-var errQueryingNotSupported = errors.New("querying is not supported in memstore")
 
 // Provider represents an MemStore implementation of the storage.Provider interface
 type Provider struct {
@@ -119,12 +115,12 @@ func (m *MemStore) Get(k string) ([]byte, error) {
 
 // CreateIndex is not supported in memstore, and calling it will always return an error.
 func (m *MemStore) CreateIndex(createIndexRequest storage.CreateIndexRequest) error {
-	return errIndexingNotSupported
+	return storage.ErrIndexingNotSupported
 }
 
 // Query is not supported in memstore, and calling it will always return an error.
 func (m *MemStore) Query(query string) (storage.ResultsIterator, error) {
-	return nil, errQueryingNotSupported
+	return nil, storage.ErrQueryingNotSupported
 }
 
 func (m *MemStore) close() {

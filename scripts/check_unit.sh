@@ -38,13 +38,18 @@ fi
 remove_docker_container () {
 DOCKER_KILL_EXIT_CODE=0
 docker kill CouchDBStoreTest >/dev/null 2>&1 || DOCKER_KILL_EXIT_CODE=$?
+docker kill MySQLStoreTest >/dev/null 2>&1 || DOCKER_KILL_EXIT_CODE=$?
+
 
 check_exit_code $DOCKER_KILL_EXIT_CODE "docker kill CouchDBStoreTest"
+check_exit_code $DOCKER_KILL_EXIT_CODE "docker kill MySQLStoreTest"
 
 DOCKER_RM_EXIT_CODE=0
 docker rm CouchDBStoreTest >/dev/null 2>&1 || DOCKER_RM_EXIT_CODE=$?
+docker rm MySQLStoreTest >/dev/null 2>&1 || DOCKER_KILL_EXIT_CODE=$?
 
 check_exit_code $DOCKER_RM_EXIT_CODE "docker rm CouchDBStoreTest"
+check_exit_code $DOCKER_RM_EXIT_CODE "docker rm MySQLStoreTest"
 }
 
 remove_docker_container
@@ -53,11 +58,13 @@ PKGS=`go list github.com/trustbloc/edge-core/... 2> /dev/null | \
                                                   grep -v /mocks`
 
 docker run -p 5984:5984 -d --name CouchDBStoreTest couchdb:2.3.1 >/dev/null
+docker run -p 3306:3306 --name MySQLStoreTest -e MYSQL_ROOT_PASSWORD=my-secret-pw -d mysql:8.0.20 >/dev/null || true
 
 GO_TEST_EXIT_CODE=0
 go test $PKGS -count=1 -race -coverprofile=profile.out -covermode=atomic -timeout=10m || GO_TEST_EXIT_CODE=$?
 if [ $GO_TEST_EXIT_CODE -ne 0 ]; then
   docker kill CouchDBStoreTest >/dev/null
+  docker kill MySQLStoreTest >/dev/null
   remove_docker_container
 
   exit $GO_TEST_EXIT_CODE
@@ -66,6 +73,7 @@ fi
 amend_coverage_file
 
 docker kill CouchDBStoreTest >/dev/null
+docker kill MySQLStoreTest >/dev/null
 remove_docker_container
 
 cd "$pwd" || exit
