@@ -17,6 +17,15 @@ var ErrStoreNotFound = errors.New("store not found")
 // ErrValueNotFound is used when an attempt is made to retrieve a value using a key that isn't in the store.
 var ErrValueNotFound = errors.New("store does not have a value associated with this key")
 
+// ErrIndexingNotSupported is used when create index is not supported by the store implementation.
+var ErrIndexingNotSupported = errors.New("indexing is not supported")
+
+// ErrQueryingNotSupported  is used when querying is not supported by the store implementation.
+var ErrQueryingNotSupported = errors.New("querying is not supported")
+
+// EndKeySuffix end key suffix
+const EndKeySuffix = "!!"
+
 // Provider represents a storage provider.
 type Provider interface {
 	// CreateStore creates a new store with the given name.
