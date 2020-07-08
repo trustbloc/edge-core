@@ -13,20 +13,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/trustbloc/edge-core/pkg/storage"
-
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
+
+	"github.com/trustbloc/edge-core/pkg/storage"
 )
 
 const (
 	sqlStoreDBURL = "root:my-secret-pw@tcp(127.0.0.1:3306)/"
+	testIndexName = "TestIndex"
 )
 
 // For these unit tests to run, you must ensure you have a SQL DB instance running at the URL specified in
 // sqlStoreDBURL. 'make unit-test' from the terminal will take care of this for you.
 // To run the tests manually, start an instance by running the following command in the terminal
-// docker run -p 3306:3306 --name MYSQLStoreTest -e MYSQL_ROOT_PASSWORD=my-secret-pw -d mysql:8.0.20
+// docker run -p 3306:3306 --name MySQLStoreTest -e MYSQL_ROOT_PASSWORD=my-secret-pw -d mysql:8.0.20
 
 func TestMain(m *testing.M) {
 	err := waitForSQLDBToStart()
@@ -293,20 +294,27 @@ func TestSQLDBStore(t *testing.T) {
 		require.Nil(t, res)
 		require.Contains(t, err.Error(), "failed to scan the SQL rows while getting value")
 	})
+}
+
+func TestMySqlDBStore_query(t *testing.T) {
+	var storeName = "testIterator"
+
+	prov, e := NewProvider(sqlStoreDBURL)
+	require.NoError(t, e)
+	store, e := prov.OpenStore(storeName)
+	require.NoError(t, e)
+
+	const valPrefix = "val-for-%s"
+
+	keys := []string{"abc_123", "abc_124", "abc_125", "abc_126", "jkl_123", "mno_123"}
+
+	for _, key := range keys {
+		e := store.Put(key, []byte(fmt.Sprintf(valPrefix, key)))
+
+		require.NoError(t, e)
+	}
+
 	t.Run("Test sql db store query", func(t *testing.T) {
-		prov, err := NewProvider(sqlStoreDBURL)
-		require.NoError(t, err)
-		store, err := prov.OpenStore("testIterator")
-		require.NoError(t, err)
-
-		const valPrefix = "val-for-%s"
-		keys := []string{"abc_123", "abc_124", "abc_125", "abc_126", "jkl_123", "mno_123"}
-
-		for _, key := range keys {
-			err = store.Put(key, []byte(fmt.Sprintf(valPrefix, key)))
-			require.NoError(t, err)
-		}
-
 		itr, err := store.Query("SELECT * FROM testIterator WHERE `key` >=  'abc_' AND `key` < 'abc!!' " +
 			"order by `key`")
 		require.NoError(t, err)
@@ -331,13 +339,138 @@ func TestSQLDBStore(t *testing.T) {
 		require.NoError(t, err)
 		verifyItr(t, itr, 1, "")
 
-		itr, err = store.Query(`""`)
-		require.Error(t, err)
+		itr, e := store.Query(`""`)
+		require.Error(t, e)
 		require.Nil(t, itr)
-		require.Contains(t, err.Error(), "failed to query rows")
+		require.Contains(t, e.Error(), "failed to query rows")
+	})
+	t.Run("Successfully query using index", func(t *testing.T) {
+		err := createIndex(store, "`key`", storeName)
+		require.NoError(t, err)
+		//nolint: gosec
+		itr, err := store.Query("SELECT * FROM " + storeName + "" +
+			" USE INDEX (" + testIndexName + ") WHERE `key` = 'abc_124'")
+		require.NoError(t, err)
+
+		ok, e := itr.Next()
+		require.NoError(t, e)
+		require.True(t, ok)
+
+		value, e := itr.Value()
+		require.NoError(t, e)
+		require.Equal(t, "val-for-abc_124", string(value))
+
+		ok, err = itr.Next()
+		require.NoError(t, err)
+		require.False(t, ok)
+
+		err = itr.Release()
+		require.NoError(t, err)
+	})
+	t.Run("Successfully query using index on two columns",
+		func(t *testing.T) {
+			err := createIndex(store, "`key`, value(255)", storeName)
+			require.NoError(t, err)
+
+			//nolint: gosec
+			itr, err := store.Query("SELECT * FROM " + storeName + "" +
+				" USE INDEX (" + testIndexName + ") WHERE `key` = 'abc_124'")
+			require.NoError(t, err)
+
+			ok, err := itr.Next()
+			require.NoError(t, err)
+			require.True(t, ok)
+
+			require.NoError(t, err)
+			value, err := itr.Value()
+			require.NoError(t, err)
+			require.Equal(t, "val-for-abc_124", string(value))
+
+			ok, err = itr.Next()
+			require.NoError(t, err)
+			require.False(t, ok)
+
+			err = itr.Release()
+			require.NoError(t, err)
+		})
+}
+func TestMySqlDBStore_CreateIndex(t *testing.T) {
+	var storeName = "store2"
+
+	prov, err := NewProvider(sqlStoreDBURL)
+	require.NoError(t, err)
+	store, err := prov.OpenStore(storeName)
+	require.NoError(t, err)
+
+	t.Run("Successfully create index", func(t *testing.T) {
+		sqlDBStore, ok := store.(*sqlDBStore)
+		require.True(t, ok)
+
+		err = createIndex(store, "`key`", storeName)
+		require.NoError(t, err)
+
+		rows, err := sqlDBStore.db.Query("SELECT DISTINCT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS" +
+			" WHERE TABLE_NAME = 'store2';")
+		require.NoError(t, err)
+
+		var IndexName string
+		for rows.Next() {
+			err := rows.Scan(&IndexName)
+			require.NoError(t, err)
+		}
+		require.Equal(t, testIndexName, IndexName)
+	})
+	t.Run("Fail to get index", func(t *testing.T) {
+		sqlDBStore, ok := store.(*sqlDBStore)
+		require.True(t, ok)
+
+		db, err := sql.Open("mysql", "root:@tcp(127.0.0.1:45454)/")
+		require.NoError(t, err)
+
+		sqlDBStore.db = db
+
+		req := storage.CreateIndexRequest{
+			IndexStorageLocation: storeName,
+			IndexName:            testIndexName,
+			WhatToIndex:          "`key`",
+		}
+		err = sqlDBStore.CreateIndex(req)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to get indexes")
+	})
+	t.Run("Fail to prepare get index statement", func(t *testing.T) {
+		sqlDBStore, ok := store.(*sqlDBStore)
+		require.True(t, ok)
+
+		db, err := sql.Open("mysql", "root:@tcp(127.0.0.1:45454)/")
+		require.NoError(t, err)
+
+		sqlDBStore.db = db
+		indexes, err := sqlDBStore.getIndexes()
+		require.Nil(t, indexes)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to prepare index statement")
+	})
+	t.Run("Fail to drop existing index", func(t *testing.T) {
+		sqlDBStore, ok := store.(*sqlDBStore)
+		require.True(t, ok)
+
+		indexes := []string{"test", "test_2"}
+		err := sqlDBStore.dropExistingIndex(indexes, storage.CreateIndexRequest{IndexName: "test"})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed to drop an existing index")
+	})
+
+	t.Run("Fail to create index - invalid index request", func(t *testing.T) {
+		prov, err := NewProvider(sqlStoreDBURL)
+		require.NoError(t, err)
+		store, err := prov.OpenStore("store1")
+		require.NoError(t, err)
+
+		err = createIndex(store, ``, "store1")
+		require.Contains(t, err.Error(), "failed to create index Error")
 	})
 }
-
 func verifyItr(t *testing.T, itr storage.ResultsIterator, count int, prefix string) {
 	var vals []string
 
@@ -365,4 +498,14 @@ func verifyItr(t *testing.T, itr storage.ResultsIterator, count int, prefix stri
 	err = itr.Release()
 	require.NoError(t, err)
 	require.False(t, ok)
+}
+
+func createIndex(store storage.Store, whatToIndex, storageLocation string) error {
+	createIndexRequest := storage.CreateIndexRequest{
+		IndexStorageLocation: storageLocation,
+		IndexName:            testIndexName,
+		WhatToIndex:          whatToIndex,
+	}
+
+	return store.CreateIndex(createIndexRequest)
 }
