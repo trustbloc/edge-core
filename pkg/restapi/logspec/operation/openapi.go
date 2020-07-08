@@ -6,6 +6,12 @@ SPDX-License-Identifier: Apache-2.0
 
 package operation
 
+// emptyRes model
+//
+// swagger:response emptyRes
+type emptyRes struct { // nolint: unused,deadcode
+}
+
 // changeLogSpecReq model
 //
 // swagger:parameters changeLogSpecReq
