@@ -217,7 +217,72 @@ type sqlDBResultsIterator struct {
 }
 
 func (s *sqlDBStore) CreateIndex(createIndexRequest storage.CreateIndexRequest) error {
-	// TODO: Issue-36 Implement Create Index
+	// get all the created indexes
+	indexes, err := s.getIndexes()
+	if err != nil {
+		return fmt.Errorf("failed to get indexes: %s", err)
+	}
+	// if an index exits, drop it as sql throws duplicate key_name error
+	err = s.dropExistingIndex(indexes, createIndexRequest)
+	if err != nil {
+		return fmt.Errorf("failed to drop an existing index: %s", err)
+	}
+	// create an index
+	// todo issue-38 to sanitize input
+	createIndexStmt := "CREATE INDEX " + createIndexRequest.IndexName + " ON " +
+		createIndexRequest.IndexStorageLocation + " (" + createIndexRequest.WhatToIndex + ")"
+
+	_, err = s.db.Exec(createIndexStmt)
+	if err != nil {
+		return fmt.Errorf("failed to create index %w", err)
+	}
+
+	return nil
+}
+
+func (s *sqlDBStore) getIndexes() ([]string, error) {
+	getIndexStmt := "SELECT DISTINCT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_NAME= ?"
+
+	indexStmt, err := s.db.Prepare(getIndexStmt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare index statement: %w", err)
+	}
+
+	rows, err := indexStmt.Query(s.tableName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query select index statement: %w", err)
+	}
+
+	var index string
+
+	var indexes []string
+	// Tables by default have a clustered index named as PRIMARY and can contain more than one index
+	for rows.Next() {
+		err := rows.Scan(&index)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan the rows: %w", err)
+		}
+
+		indexes = append(indexes, index)
+	}
+
+	return indexes, nil
+}
+
+func (s *sqlDBStore) dropExistingIndex(indexes []string, createIndexRequest storage.CreateIndexRequest) error {
+	// todo issue-38 to sanitize input
+	for i := range indexes {
+		if indexes[i] == createIndexRequest.IndexName {
+			dropIndexStmt := "ALTER TABLE " + createIndexRequest.IndexStorageLocation + " DROP INDEX " +
+				createIndexRequest.IndexName
+
+			_, err := s.db.Exec(dropIndexStmt)
+			if err != nil {
+				return fmt.Errorf("failed to drop an existing index: %w", err)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -225,10 +290,6 @@ func (s *sqlDBStore) Query(findQuery string) (storage.ResultsIterator, error) {
 	resultRows, err := s.db.Query(findQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query rows %w", err)
-	}
-
-	if err = resultRows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to get resulted rows %w", err)
 	}
 
 	return &sqlDBResultsIterator{resultRows: resultRows}, nil
