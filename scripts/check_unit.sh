@@ -58,7 +58,7 @@ PKGS=`go list github.com/trustbloc/edge-core/... 2> /dev/null | \
                                                   grep -v /mocks`
 
 docker run -p 5984:5984 -d --name CouchDBStoreTest couchdb:2.3.1 >/dev/null
-docker run -p 3306:3306 --name MySQLStoreTest -e MYSQL_ROOT_PASSWORD=my-secret-pw -d mysql:8.0.20 >/dev/null || true
+docker run -p 3306:3306 --name MySQLStoreTest -e MYSQL_ROOT_PASSWORD=my-secret-pw -d mysql:8.0.20 >/dev/null
 
 GO_TEST_EXIT_CODE=0
 go test $PKGS -count=1 -race -coverprofile=profile.out -covermode=atomic -timeout=10m || GO_TEST_EXIT_CODE=$?

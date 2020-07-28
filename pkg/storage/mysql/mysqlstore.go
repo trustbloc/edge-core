@@ -31,7 +31,6 @@ func WithDBPrefix(dbPrefix string) Option {
 // Provider represents a MySQL DB implementation of the storage.Provider interface
 type Provider struct {
 	dbURL    string
-	db       *sql.DB
 	dbs      map[string]*sqlDBStore
 	dbPrefix string
 	sync.RWMutex
@@ -55,28 +54,86 @@ const (
 	useDBQuery                = "USE "
 )
 
-// NewProvider instantiates Provider
-func NewProvider(dbPath string, opts ...Option) (*Provider, error) {
+// NewProvider instantiates Provider.
+// Example DB Path root:my-secret-pw@tcp(127.0.0.1:3306)/.
+func NewProvider(dbPath string, opts ...Option) (p *Provider, err error) {
 	if dbPath == "" {
 		return nil, errors.New(blankDBPathErrMsg)
 	}
 
-	// Example DB Path root:my-secret-pw@tcp(127.0.0.1:3306)/
 	db, err := sql.Open("mysql", dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open connection: %w", err)
+		return nil, fmt.Errorf("failed to open MySQL using url %s : %w", dbPath, err)
 	}
 
-	p := &Provider{
+	defer func() {
+		closeErr := db.Close()
+		if closeErr != nil {
+			err = fmt.Errorf("%s : failed to close db connection : %w", err, closeErr)
+		}
+	}()
+
+	err = db.Ping()
+	if err != nil {
+		return nil, fmt.Errorf("failed to ping MySQL at url %s : %w", dbPath, err)
+	}
+
+	p = &Provider{
 		dbURL: dbPath,
-		db:    db,
 		dbs:   map[string]*sqlDBStore{}}
 
 	for _, opt := range opts {
 		opt(p)
 	}
 
-	return p, nil
+	return p, err
+}
+
+// CreateStore creates a store with the given name.
+func (p *Provider) CreateStore(name string) (err error) {
+	if name == "" {
+		return errors.New("store name is required")
+	}
+
+	if p.dbPrefix != "" {
+		name = p.dbPrefix + "_" + name
+	}
+
+	db, err := sql.Open("mysql", p.dbURL)
+	if err != nil {
+		return fmt.Errorf("failed to open connection: %w", err)
+	}
+
+	defer func() {
+		closeErr := db.Close()
+		if closeErr != nil {
+			err = fmt.Errorf("%s : failed to close db connection : %w", err, closeErr)
+		}
+	}()
+
+	// creating the database
+	_, err = db.Exec(createDBQuery + name)
+	if err != nil {
+		return fmt.Errorf("failed to create db %s: %w", name, err)
+	}
+
+	// Use Query is used to select the created database without this DDL operations are not permitted
+	_, err = db.Exec(useDBQuery + name)
+	if err != nil {
+		return fmt.Errorf("failed to use db %s: %w", name, err)
+	}
+
+	// key has max varchar size it can accommodate as per mysql 8.0 spec
+	createTableStmt := "CREATE Table IF NOT EXISTS " + name +
+		"(`key` varchar(255) NOT NULL ,`value` BLOB, PRIMARY KEY (`key`));"
+
+	// creating key-value table inside the database
+	_, err = db.Exec(createTableStmt)
+	if err != nil {
+		return fmt.Errorf("failed to create table %s: %w", name, err)
+	}
+
+	return nil
 }
 
 // OpenStore opens and returns a new db with the given name space
@@ -91,11 +148,6 @@ func (p *Provider) OpenStore(name string) (storage.Store, error) {
 	if p.dbPrefix != "" {
 		name = p.dbPrefix + "_" + name
 	}
-	// creating the database
-	_, err := p.db.Exec(createDBQuery + name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create db %s: %w", name, err)
-	}
 
 	// Opening new db connection
 	newDBConn, err := sql.Open("mysql", p.dbURL)
@@ -107,16 +159,6 @@ func (p *Provider) OpenStore(name string) (storage.Store, error) {
 	_, err = newDBConn.Exec(useDBQuery + name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to use db %s: %w", name, err)
-	}
-
-	// key has max varchar size it can accommodate as per mysql 8.0 spec
-	createTableStmt := "CREATE Table IF NOT EXISTS " + name +
-		"(`key` varchar(255) NOT NULL ,`value` BLOB, PRIMARY KEY (`key`));"
-
-	// creating key-value table inside the database
-	_, err = newDBConn.Exec(createTableStmt)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create table %s: %w", name, err)
 	}
 
 	store := &sqlDBStore{
@@ -138,10 +180,6 @@ func (p *Provider) Close() error {
 		if err != nil {
 			return fmt.Errorf(failToCloseProviderErrMsg+": %w", err)
 		}
-	}
-
-	if err := p.db.Close(); err != nil {
-		return err
 	}
 
 	p.dbs = make(map[string]*sqlDBStore)

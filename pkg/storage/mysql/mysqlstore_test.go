@@ -13,7 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cenkalti/backoff"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/trustbloc/edge-core/pkg/storage"
@@ -23,6 +25,10 @@ const (
 	sqlStoreDBURL = "root:my-secret-pw@tcp(127.0.0.1:3306)/"
 	testIndexName = "TestIndex"
 )
+
+var _ storage.Provider = (*Provider)(nil)
+var _ storage.Store = (*sqlDBStore)(nil)
+var _ storage.ResultsIterator = (*sqlDBResultsIterator)(nil)
 
 // For these unit tests to run, you must ensure you have a SQL DB instance running at the URL specified in
 // sqlStoreDBURL. 'make unit-test' from the terminal will take care of this for you.
@@ -34,39 +40,84 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		fmt.Printf(err.Error() +
 			". Make sure you start a sqlStoreDB instance using" +
-			" 'docker run -p 3306:3306 mysql:8.0.20' before running the unit tests")
-		os.Exit(0)
+			" 'docker run -p 3306:3306 mysql:8.0.20' before running the unit tests\n")
+		os.Exit(1)
 	}
 
 	os.Exit(m.Run())
 }
 
 func waitForSQLDBToStart() error {
-	db, err := sql.Open("mysql", sqlStoreDBURL)
-	if err != nil {
-		return err
-	}
+	const retries = 30
 
-	timeout := time.After(10 * time.Second)
-
-	for {
-		select {
-		case <-timeout:
-			return fmt.Errorf("timeout: couldn't reach sql db server")
-		default:
-			err := db.Ping()
-			if err != nil {
-				return err
+	err := backoff.RetryNotify(
+		func() error {
+			db, openErr := sql.Open("mysql", sqlStoreDBURL)
+			if openErr != nil {
+				return openErr
 			}
 
-			return nil
-		}
+			return db.Ping()
+		},
+		backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), retries),
+		func(retryErr error, t time.Duration) {
+			fmt.Printf(
+				"failed to connect to MySQL, will sleep for %s before trying again : %s\n",
+				t, retryErr)
+		},
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to connect to MySQL at %s after %s : %w",
+			sqlStoreDBURL, retries*time.Second, err)
 	}
+
+	return nil
+}
+
+func TestProvider_CreateStore(t *testing.T) {
+	t.Run("creates store with prefix", func(t *testing.T) {
+		prov, err := NewProvider(sqlStoreDBURL, WithDBPrefix(randomPrefix()))
+		require.NoError(t, err)
+
+		name := "test"
+		err = prov.CreateStore(name)
+		require.NoError(t, err)
+	})
+	t.Run("creates store without prefix", func(t *testing.T) {
+		prov, err := NewProvider(sqlStoreDBURL)
+		require.NoError(t, err)
+
+		name := randomPrefix()
+		err = prov.CreateStore(name)
+		require.NoError(t, err)
+	})
+	t.Run("fails if name is missing", func(t *testing.T) {
+		prov, err := NewProvider(sqlStoreDBURL, WithDBPrefix(randomPrefix()))
+		require.NoError(t, err)
+		err = prov.CreateStore("")
+		require.Error(t, err)
+	})
+	t.Run("fails on invalid URL", func(t *testing.T) {
+		prov, err := NewProvider(sqlStoreDBURL, WithDBPrefix(randomPrefix()))
+		require.NoError(t, err)
+		prov.dbURL = "INVALID"
+		err = prov.CreateStore("test")
+		require.Error(t, err)
+	})
+	t.Run("fails on invalid table name", func(t *testing.T) {
+		prov, err := NewProvider(sqlStoreDBURL, WithDBPrefix(randomPrefix()))
+		require.NoError(t, err)
+		err = prov.CreateStore(";INVALID")
+		require.Error(t, err)
+	})
 }
 
 func TestSQLDBStore(t *testing.T) {
 	t.Run("Test sql db store put and get", func(t *testing.T) {
 		prov, err := NewProvider(sqlStoreDBURL, WithDBPrefix("prefixdb"))
+		require.NoError(t, err)
+		err = prov.CreateStore("test")
 		require.NoError(t, err)
 		store, err := prov.OpenStore("test")
 		require.NoError(t, err)
@@ -122,9 +173,13 @@ func TestSQLDBStore(t *testing.T) {
 		require.Equal(t, err.Error(), "store name is required")
 
 		// create store 1 & store 2
+		err = prov.CreateStore("store1")
+		require.NoError(t, err)
 		store1, err := prov.OpenStore("store1")
 		require.NoError(t, err)
 
+		err = prov.CreateStore("store2")
+		require.NoError(t, err)
 		store2, err := prov.OpenStore("store2")
 		require.NoError(t, err)
 
@@ -162,11 +217,11 @@ func TestSQLDBStore(t *testing.T) {
 		require.Len(t, prov.dbs, 2)
 	})
 	t.Run("Test put, get, delete, iterator error", func(t *testing.T) {
-		prov, err := NewProvider("root:@tcp(127.0.0.1:45454)/", WithDBPrefix("prefixdb"))
+		db, err := sql.Open("mysql", "root:@tcp(127.0.0.1:45454)/")
 		require.NoError(t, err)
 
 		storeErr := &sqlDBStore{
-			db: prov.db,
+			db: db,
 		}
 		const commonKey = "did:example:1"
 		data := []byte("value1")
@@ -190,14 +245,14 @@ func TestSQLDBStore(t *testing.T) {
 		// Invalid db path
 		_, err = NewProvider("root:@tcp(127.0.0.1:45454)")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to open connection")
+		require.Contains(t, err.Error(), "failed to open MySQL")
 
-		prov, err = NewProvider("root:@tcp(127.0.0.1:45454)/")
+		prov, err = NewProvider(sqlStoreDBURL)
 		require.NoError(t, err)
 
 		store, err := prov.OpenStore("sample")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to create db")
+		require.Contains(t, err.Error(), "failed to use db")
 		require.Nil(t, store)
 	})
 	t.Run("Test the open new connection error", func(t *testing.T) {
@@ -219,7 +274,7 @@ func TestSQLDBStore(t *testing.T) {
 		require.Contains(t, err.Error(), "failed to use db testErr")
 	})
 	t.Run("Test sqlDB multi store close by name", func(t *testing.T) {
-		prov, err := NewProvider(sqlStoreDBURL, WithDBPrefix("prefixdb"))
+		prov, err := NewProvider(sqlStoreDBURL, WithDBPrefix(randomPrefix()))
 		require.NoError(t, err)
 
 		const commonKey = "did:example:1"
@@ -229,6 +284,8 @@ func TestSQLDBStore(t *testing.T) {
 		storesToClose := []string{"store_1", "store_3", "store_5"}
 
 		for _, name := range storeNames {
+			e := prov.CreateStore(name)
+			require.NoError(t, e)
 			store, e := prov.OpenStore(name)
 			require.NoError(t, e)
 
@@ -300,6 +357,8 @@ func TestMySqlDBStore_query(t *testing.T) {
 	var storeName = "testIterator"
 
 	prov, e := NewProvider(sqlStoreDBURL)
+	require.NoError(t, e)
+	e = prov.CreateStore(storeName)
 	require.NoError(t, e)
 	store, e := prov.OpenStore(storeName)
 	require.NoError(t, e)
@@ -399,6 +458,8 @@ func TestMySqlDBStore_CreateIndex(t *testing.T) {
 
 	prov, err := NewProvider(sqlStoreDBURL)
 	require.NoError(t, err)
+	err = prov.CreateStore(storeName)
+	require.NoError(t, err)
 	store, err := prov.OpenStore(storeName)
 	require.NoError(t, err)
 
@@ -464,10 +525,13 @@ func TestMySqlDBStore_CreateIndex(t *testing.T) {
 	t.Run("Fail to create index - invalid index request", func(t *testing.T) {
 		prov, err := NewProvider(sqlStoreDBURL)
 		require.NoError(t, err)
+		err = prov.CreateStore("store1")
+		require.NoError(t, err)
 		store, err := prov.OpenStore("store1")
 		require.NoError(t, err)
 
 		err = createIndex(store, ``, "store1")
+		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to create index Error")
 	})
 }
@@ -508,4 +572,9 @@ func createIndex(store storage.Store, whatToIndex, storageLocation string) error
 	}
 
 	return store.CreateIndex(createIndexRequest)
+}
+
+func randomPrefix() string {
+	s := uuid.New().String()
+	return fmt.Sprintf("test%s", s[strings.LastIndex(s, "-")+1:])
 }
