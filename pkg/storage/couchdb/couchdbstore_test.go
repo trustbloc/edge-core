@@ -86,7 +86,8 @@ func TestNewProvider(t *testing.T) {
 
 	t.Run("Unreachable URL provided", func(t *testing.T) {
 		provider, err := NewProvider("%")
-		require.Equal(t, `parse http://%: invalid URL escape "%"`, err.Error())
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid URL escape")
 		require.Nil(t, provider)
 	})
 }
