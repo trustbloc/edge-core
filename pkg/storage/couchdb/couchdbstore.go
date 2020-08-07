@@ -18,16 +18,20 @@ import (
 
 	_ "github.com/go-kivik/couchdb" // The CouchDB driver
 	"github.com/go-kivik/kivik"
-	"github.com/sirupsen/logrus"
 
+	"github.com/trustbloc/edge-core/pkg/log"
 	"github.com/trustbloc/edge-core/pkg/storage"
 )
 
 const (
+	logModuleName = "edge-core-couchdbstore"
+
 	blankHostErrMsg           = "hostURL for new CouchDB provider can't be blank"
 	failToCloseProviderErrMsg = "failed to close provider"
 	couchDBNotFoundErr        = "Not Found:"
 )
+
+var logger = log.New(logModuleName)
 
 // Option configures the couchdb provider
 type Option func(opts *Provider)
@@ -292,7 +296,7 @@ func (i *couchDBResultsIterator) Next() (bool, error) {
 	warningMsg := i.resultRows.Warning()
 
 	if warningMsg != "" {
-		logrus.Warn(warningMsg)
+		logger.Warnf(warningMsg)
 	}
 
 	return nextCallResult, i.resultRows.Err()

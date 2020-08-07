@@ -6,7 +6,6 @@ SPDX-License-Identifier: Apache-2.0
 package couchdbstore
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -14,9 +13,9 @@ import (
 	"time"
 
 	"github.com/go-kivik/kivik"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
+	"github.com/trustbloc/edge-core/pkg/log"
 	"github.com/trustbloc/edge-core/pkg/storage"
 )
 
@@ -35,18 +34,59 @@ const (
 	testDesignDoc              = "TestDesignDoc"
 )
 
+var testLogger = &TestLogger{} //nolint: gochecknoglobals
+
 // For these unit tests to run, you must ensure you have a CouchDB instance running at the URL specified in couchDBURL.
 // 'make unit-test' from the terminal will take care of this for you.
 // To run the tests manually, start an instance by running docker run -p 5984:5984 couchdb:2.3.1 from a terminal.
 
+type TestLogger struct {
+	logContents string
+}
+
+func (t *TestLogger) Fatalf(msg string, args ...interface{}) {
+	t.logContents = msg
+}
+
+func (t *TestLogger) Panicf(msg string, args ...interface{}) {
+	t.logContents = msg
+}
+
+func (t *TestLogger) Debugf(msg string, args ...interface{}) {
+	t.logContents = msg
+}
+
+func (t *TestLogger) Infof(msg string, args ...interface{}) {
+	t.logContents = msg
+}
+
+func (t *TestLogger) Warnf(msg string, args ...interface{}) {
+	t.logContents = msg
+}
+
+func (t *TestLogger) Errorf(msg string, args ...interface{}) {
+	t.logContents = msg
+}
+
+type testLoggerProvider struct {
+}
+
+func (t *testLoggerProvider) GetLogger(string) log.Logger {
+	return testLogger
+}
+
 func TestMain(m *testing.M) {
 	err := waitForCouchDBToStart()
 	if err != nil {
-		log.Errorf(err.Error() +
+		logger.Errorf(err.Error() +
 			". Make sure you start a couchDB instance using" +
 			" 'docker run -p 5984:5984 couchdb:2.3.1' before running the unit tests")
 		os.Exit(1)
 	}
+
+	log.Initialize(&testLoggerProvider{})
+
+	log.SetLevel(logModuleName, log.DEBUG)
 
 	os.Exit(m.Run())
 }
@@ -319,9 +359,6 @@ func TestCouchDBStore_Query(t *testing.T) {
 		err = createIndex(store, `{"fields": ["employeeID"]}`)
 		require.NoError(t, err)
 
-		var logContents bytes.Buffer
-		log.SetOutput(&logContents)
-
 		itr, err := store.Query(`{
 		   "selector": {
 		       "employeeID": 1234
@@ -343,7 +380,7 @@ func TestCouchDBStore_Query(t *testing.T) {
 		require.False(t, ok)
 
 		// Check to make sure an "index not used" warning didn't get logged
-		require.Empty(t, logContents.String())
+		require.Empty(t, testLogger.logContents)
 
 		err = itr.Release()
 		require.NoError(t, err)
@@ -358,9 +395,6 @@ func TestCouchDBStore_Query(t *testing.T) {
 
 			err = createIndex(store, `{"fields": ["name"]}`)
 			require.NoError(t, err)
-
-			var logContents bytes.Buffer
-			log.SetOutput(&logContents)
 
 			itr, err := store.Query(`{
 		   "selector": {
@@ -384,8 +418,8 @@ func TestCouchDBStore_Query(t *testing.T) {
 			require.False(t, ok)
 
 			// Confirm that an "index not used" warning got logged
-			// Note that Kivik only sets the warning valueafter all the rows have been iterated through.
-			require.Contains(t, logContents.String(), "_design/"+testDesignDoc+", "+testIndexName+" was not used because "+
+			// Note that Kivik only sets the warning value after all the rows have been iterated through.
+			require.Contains(t, testLogger.logContents, "_design/"+testDesignDoc+", "+testIndexName+" was not used because "+
 				"it is not a valid index for this query.")
 			err = itr.Release()
 			require.NoError(t, err)

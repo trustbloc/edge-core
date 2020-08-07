@@ -9,9 +9,9 @@ package memstore
 import (
 	"testing"
 
-	"github.com/trustbloc/edge-core/pkg/storage"
-
 	"github.com/stretchr/testify/require"
+
+	"github.com/trustbloc/edge-core/pkg/storage"
 )
 
 const testStoreName = "teststore"

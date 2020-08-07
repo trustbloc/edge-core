@@ -10,10 +10,10 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/sirupsen/logrus"
+	"github.com/trustbloc/edge-core/pkg/log"
 )
 
-var logger = logrus.New()
+var logger = log.New("edge-core-tls")
 
 // CertPool is a thread safe wrapper around the x509 standard library
 // cert pool implementation.
