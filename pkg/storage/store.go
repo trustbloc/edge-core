@@ -23,8 +23,14 @@ var ErrIndexingNotSupported = errors.New("indexing is not supported")
 // ErrQueryingNotSupported  is used when querying is not supported by the store implementation.
 var ErrQueryingNotSupported = errors.New("querying is not supported")
 
+// ErrKeyRequired is returned when an attempt is made to call a method with an empty key when it's not allowed.
+var ErrKeyRequired = errors.New("key is mandatory")
+
 // EndKeySuffix end key suffix
 const EndKeySuffix = "!!"
+
+// DeleteFailureErrMsg is used when there's a failure during a key-value pair deletion from a store.
+const DeleteFailureErrMsg = "failure during deletion: %w"
 
 // Provider represents a storage provider.
 type Provider interface {
@@ -68,6 +74,9 @@ type Store interface {
 	// Query queries the store for data based on the provided query string, the format of
 	// which will be dependent on what the underlying store requires.
 	Query(query string) (ResultsIterator, error)
+
+	// Delete deletes the key-value pair associated with k.
+	Delete(k string) error
 }
 
 // ResultsIterator represents an iterator that can be used to iterate over all the stored key-value pairs.

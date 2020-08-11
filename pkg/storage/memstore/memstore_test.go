@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package memstore
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -143,4 +144,45 @@ func TestMemStore_Query(t *testing.T) {
 	itr, err := memStore.Query("")
 	require.Equal(t, storage.ErrQueryingNotSupported, err)
 	require.Nil(t, itr)
+}
+
+func TestMemStore_Remove(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		testKey := "testKey"
+		testValue := []byte("value1")
+
+		prov := NewProvider()
+
+		err := prov.CreateStore(testStoreName)
+		require.NoError(t, err)
+
+		store, err := prov.OpenStore(testStoreName)
+		require.NoError(t, err)
+
+		err = store.Put(testKey, testValue)
+		require.NoError(t, err)
+
+		err = store.Delete(testKey)
+		require.NoError(t, err)
+
+		// Verify that the key-value pair was actually deleted
+		doc, err := store.Get(testKey)
+		require.Equal(t, storage.ErrValueNotFound, err)
+		require.Empty(t, doc)
+	})
+	t.Run("Key-value pair does not exist", func(t *testing.T) {
+		testKey := "testKey"
+
+		prov := NewProvider()
+
+		err := prov.CreateStore(testStoreName)
+		require.NoError(t, err)
+
+		store, err := prov.OpenStore(testStoreName)
+		require.NoError(t, err)
+
+		err = store.Delete(testKey)
+		require.Truef(t, errors.Is(err, storage.ErrValueNotFound),
+			`"%s" does not contain the expected error "%s"`, err, storage.ErrValueNotFound)
+	})
 }
