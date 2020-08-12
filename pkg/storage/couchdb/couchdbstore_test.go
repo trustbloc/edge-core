@@ -32,6 +32,7 @@ const (
 	testNonJSONValue1          = "2"
 	testIndexName              = "TestIndex"
 	testDesignDoc              = "TestDesignDoc"
+	testDBPrefix               = "dbprefix"
 )
 
 var testLogger = &TestLogger{} //nolint: gochecknoglobals
@@ -201,7 +202,7 @@ func TestProvider_OpenStore(t *testing.T) {
 
 func TestProvider_CloseStore(t *testing.T) {
 	t.Run("Successfully close a store", func(t *testing.T) {
-		provider := initializeTest(t, WithDBPrefix("prefixdb"))
+		provider := initializeTest(t, WithDBPrefix(testDBPrefix))
 
 		_ = createAndOpenTestStore(t, provider)
 
@@ -523,6 +524,11 @@ func initializeTest(t *testing.T, opts ...Option) *Provider {
 func resetCouchDB(t *testing.T, p *Provider) {
 	err := p.couchDBClient.DestroyDB(context.Background(), testStoreName)
 
+	if err != nil {
+		require.Equal(t, "Not Found: Database does not exist.", err.Error())
+	}
+
+	err = p.couchDBClient.DestroyDB(context.Background(), testDBPrefix+"_"+testStoreName)
 	if err != nil {
 		require.Equal(t, "Not Found: Database does not exist.", err.Error())
 	}
