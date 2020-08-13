@@ -7,6 +7,7 @@ package mysql
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -34,6 +35,19 @@ var _ storage.ResultsIterator = (*sqlDBResultsIterator)(nil)
 // sqlStoreDBURL. 'make unit-test' from the terminal will take care of this for you.
 // To run the tests manually, start an instance by running the following command in the terminal
 // docker run -p 3306:3306 --name MySQLStoreTest -e MYSQL_ROOT_PASSWORD=my-secret-pw -d mysql:8.0.20
+
+var errMockResultRowsAffected = errors.New("mockResult always fails")
+
+type mockResult struct {
+}
+
+func (m mockResult) LastInsertId() (int64, error) {
+	panic("implement me")
+}
+
+func (m mockResult) RowsAffected() (int64, error) {
+	return -1, errMockResultRowsAffected
+}
 
 func TestMain(m *testing.M) {
 	err := waitForSQLDBToStart()
@@ -151,12 +165,12 @@ func TestSQLDBStore(t *testing.T) {
 		// nil key
 		_, err = store.Get("")
 		require.Error(t, err)
-		require.Equal(t, "key is mandatory", err.Error())
+		require.Equal(t, storage.ErrKeyRequired, err)
 
 		// nil key
 		err = store.Put("", data)
 		require.Error(t, err)
-		require.Equal(t, "key is mandatory", err.Error())
+		require.Equal(t, storage.ErrKeyRequired, err)
 
 		err = prov.Close()
 		require.NoError(t, err)
@@ -535,6 +549,89 @@ func TestMySqlDBStore_CreateIndex(t *testing.T) {
 		require.Contains(t, err.Error(), "failed to create index Error")
 	})
 }
+
+func TestMySqlDBStore_Remove(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		testKey := "testKey"
+		testData := []byte("value1")
+
+		prov, err := NewProvider(sqlStoreDBURL)
+		require.NoError(t, err)
+
+		err = prov.CreateStore("testStore")
+		require.NoError(t, err)
+
+		store, err := prov.OpenStore("testStore")
+		require.NoError(t, err)
+
+		err = store.Put(testKey, testData)
+		require.NoError(t, err)
+
+		err = store.Delete(testKey)
+		require.NoError(t, err)
+
+		// Verify that the key-value pair was actually deleted
+		doc, err := store.Get(testKey)
+		require.Equal(t, storage.ErrValueNotFound, err)
+		require.Empty(t, doc)
+	})
+	t.Run("Empty key", func(t *testing.T) {
+		prov, err := NewProvider(sqlStoreDBURL)
+		require.NoError(t, err)
+
+		err = prov.CreateStore("testStore")
+		require.NoError(t, err)
+
+		store, err := prov.OpenStore("testStore")
+		require.NoError(t, err)
+
+		err = store.Delete("")
+		require.Equal(t, storage.ErrKeyRequired, err)
+	})
+	t.Run("Key not found", func(t *testing.T) {
+		prov, err := NewProvider(sqlStoreDBURL)
+		require.NoError(t, err)
+
+		err = prov.CreateStore("testStore")
+		require.NoError(t, err)
+
+		store, err := prov.OpenStore("testStore")
+		require.NoError(t, err)
+
+		err = store.Delete("ThisIsNotAStoredKey")
+		require.EqualError(t, err,
+			"failure during deletion: key not found (no rows were affected by delete query)")
+	})
+	t.Run("Fail to delete row", func(t *testing.T) {
+		prov, err := NewProvider(sqlStoreDBURL)
+		require.NoError(t, err)
+
+		err = prov.CreateStore("testStore")
+		require.NoError(t, err)
+
+		store, err := prov.OpenStore("testStore")
+		require.NoError(t, err)
+
+		sqlStore, ok := store.(*sqlDBStore)
+		require.True(t, ok, "unable to assert store as a sqlStore")
+
+		sqlStore.tableName = "someNonExistentTable"
+
+		err = store.Delete("SomeKey")
+		require.EqualError(t, err,
+			"failure during deletion: failure while deleting row: Error 1146: "+
+				"Table 'testStore.someNonExistentTable' doesn't exist")
+	})
+}
+
+func TestMySqlDBStore_checkDeleteResult(t *testing.T) {
+	t.Run("Failure while retrieving number of rows affected", func(t *testing.T) {
+		err := checkDeleteResult(mockResult{})
+		require.Truef(t, errors.Is(err, errMockResultRowsAffected),
+			`"%s" does not contain the expected error "%s"`, err, errMockResultRowsAffected)
+	})
+}
+
 func verifyItr(t *testing.T, itr storage.ResultsIterator, count int, prefix string) {
 	var vals []string
 

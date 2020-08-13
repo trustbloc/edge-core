@@ -7,6 +7,7 @@ package couchdbstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -293,7 +294,8 @@ func TestCouchDBStore_Get(t *testing.T) {
 
 		value, err := store.Get(testDocKey)
 		require.Nil(t, value)
-		require.Equal(t, storage.ErrValueNotFound.Error(), err.Error())
+		require.Truef(t, errors.Is(err, storage.ErrValueNotFound),
+			`"%s" does not contain the expected error "%s"`, err, storage.ErrValueNotFound)
 	})
 }
 
@@ -508,6 +510,29 @@ func TestCouchDBStore_ResultsIterator(t *testing.T) {
 		require.Nil(t, value)
 		err = itr.Release()
 		require.NoError(t, err)
+	})
+}
+
+func TestCouchDBStore_Remove(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey, []byte(testJSONValue1))
+		require.NoError(t, err)
+
+		err = store.Delete(testDocKey)
+		require.NoError(t, err)
+	})
+	t.Run("Document not found", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Delete(testDocKey)
+		require.Truef(t, errors.Is(err, storage.ErrValueNotFound),
+			`"%s" does not contain the expected error "%s"`, err, storage.ErrValueNotFound)
 	})
 }
 

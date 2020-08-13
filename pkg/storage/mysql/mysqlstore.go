@@ -137,6 +137,7 @@ func (p *Provider) CreateStore(name string) (err error) {
 }
 
 // OpenStore opens and returns a new db with the given name space
+// TODO OpenStore should not automatically create a store if it doesn't exist #47
 func (p *Provider) OpenStore(name string) (storage.Store, error) {
 	p.Lock()
 	defer p.Unlock()
@@ -209,7 +210,7 @@ func (p *Provider) CloseStore(name string) error {
 // Put stores the key and the value
 func (s *sqlDBStore) Put(k string, v []byte) error {
 	if k == "" {
-		return errors.New("key is mandatory")
+		return storage.ErrKeyRequired
 	}
 
 	//nolint: gosec
@@ -331,6 +332,36 @@ func (s *sqlDBStore) Query(findQuery string) (storage.ResultsIterator, error) {
 	}
 
 	return &sqlDBResultsIterator{resultRows: resultRows}, nil
+}
+
+func (s *sqlDBStore) Delete(k string) error {
+	if k == "" {
+		return storage.ErrKeyRequired
+	}
+
+	//nolint: gosec
+	// TODO address SQL injection warning #38
+	result, err := s.db.Exec("DELETE FROM `"+s.tableName+"` WHERE `key`= ?", k)
+	if err != nil {
+		return fmt.Errorf(storage.DeleteFailureErrMsg, fmt.Errorf("failure while deleting row: %w", err))
+	}
+
+	return checkDeleteResult(result)
+}
+
+func checkDeleteResult(result sql.Result) error {
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf(storage.DeleteFailureErrMsg,
+			fmt.Errorf("failure while retrieving number of rows affected: %w", err))
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf(storage.DeleteFailureErrMsg,
+			errors.New("key not found (no rows were affected by delete query)"))
+	}
+
+	return nil
 }
 
 // Key returns the key of the current key-value pair.

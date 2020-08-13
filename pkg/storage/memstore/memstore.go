@@ -129,3 +129,18 @@ func (m *MemStore) close() {
 
 	m.db = make(map[string][]byte)
 }
+
+// Delete deletes the key-value pair associated with k.
+func (m *MemStore) Delete(k string) error {
+	m.mux.Lock()
+	defer m.mux.Unlock()
+
+	_, exists := m.db[k]
+	if !exists {
+		return storage.ErrValueNotFound
+	}
+
+	delete(m.db, k)
+
+	return nil
+}

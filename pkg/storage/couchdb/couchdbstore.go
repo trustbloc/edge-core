@@ -28,8 +28,13 @@ const (
 
 	blankHostErrMsg           = "hostURL for new CouchDB provider can't be blank"
 	failToCloseProviderErrMsg = "failed to close provider"
-	couchDBNotFoundErr        = "Not Found:"
+	couchDBNotFoundErr        = "Not Found: missing"
+	getRevisionFailureErrMsg  = "failure while getting revision: %w"
+	getRawDocFailureErrMsg    = "failure while getting raw CouchDB document: %w"
 )
+
+var errMissingRevisionField = errors.New("the retrieved CouchDB document is missing the _rev field")
+var errFailToAssertRevAsString = errors.New("failed to assert the retrieved revision as a string")
 
 var logger = log.New(logModuleName)
 
@@ -212,16 +217,8 @@ func wrapTextAsCouchDBAttachment(textToWrap []byte) []byte {
 
 // Get retrieves the value in the store associated with the given key.
 func (c *CouchDBStore) Get(k string) ([]byte, error) {
-	rawDoc := make(map[string]interface{})
-
-	row := c.db.Get(context.Background(), k)
-
-	err := row.ScanDoc(&rawDoc)
+	rawDoc, err := c.getRawDoc(k)
 	if err != nil {
-		if strings.Contains(err.Error(), couchDBNotFoundErr) {
-			return nil, storage.ErrValueNotFound
-		}
-
 		return nil, err
 	}
 
@@ -280,6 +277,21 @@ func (c *CouchDBStore) Query(findQuery string) (storage.ResultsIterator, error) 
 	}
 
 	return &couchDBResultsIterator{store: c, resultRows: resultRows}, nil
+}
+
+// Delete deletes the key-value pair associated with k.
+func (c *CouchDBStore) Delete(k string) error {
+	revString, err := c.getRevision(k)
+	if err != nil {
+		return fmt.Errorf(storage.DeleteFailureErrMsg, err)
+	}
+
+	_, err = c.db.Delete(context.Background(), k, revString)
+	if err != nil {
+		return fmt.Errorf(storage.DeleteFailureErrMsg, err)
+	}
+
+	return nil
 }
 
 type couchDBResultsIterator struct {
@@ -353,6 +365,42 @@ func (c *CouchDBStore) getStoredValueFromRawDoc(rawDoc map[string]interface{}, k
 	}
 
 	return strippedJSON, nil
+}
+
+func (c *CouchDBStore) getRevision(k string) (string, error) {
+	rawDoc, err := c.getRawDoc(k)
+	if err != nil {
+		return "", fmt.Errorf(getRevisionFailureErrMsg, err)
+	}
+
+	rev, containsRev := rawDoc["_rev"]
+	if !containsRev {
+		return "", fmt.Errorf(getRevisionFailureErrMsg, errMissingRevisionField)
+	}
+
+	revString, ok := rev.(string)
+	if !ok {
+		return "", fmt.Errorf(getRevisionFailureErrMsg, errFailToAssertRevAsString)
+	}
+
+	return revString, nil
+}
+
+func (c *CouchDBStore) getRawDoc(k string) (map[string]interface{}, error) {
+	rawDoc := make(map[string]interface{})
+
+	row := c.db.Get(context.Background(), k)
+
+	err := row.ScanDoc(&rawDoc)
+	if err != nil {
+		if strings.Contains(err.Error(), couchDBNotFoundErr) {
+			return nil, fmt.Errorf(getRawDocFailureErrMsg, storage.ErrValueNotFound)
+		}
+
+		return nil, fmt.Errorf(getRawDocFailureErrMsg, err)
+	}
+
+	return rawDoc, nil
 }
 
 func (c *CouchDBStore) getDataFromAttachment(k string) ([]byte, error) {
