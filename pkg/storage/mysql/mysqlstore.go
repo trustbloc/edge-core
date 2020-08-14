@@ -65,7 +65,13 @@ func NewProvider(dbPath string, opts ...Option) (p *Provider, err error) {
 	defer func() {
 		closeErr := db.Close()
 		if closeErr != nil {
-			err = fmt.Errorf(failureWhileClosingMySQLConnection, closeErr)
+			if err == nil {
+				err = fmt.Errorf(failureWhileClosingMySQLConnection, closeErr)
+			} else {
+				secondErr := fmt.Sprintf("Additional error: %s",
+					fmt.Errorf(failureWhileClosingMySQLConnection, closeErr))
+				err = fmt.Errorf("error while creating new provider: %w. %s", err, secondErr)
+			}
 		}
 	}()
 
@@ -103,7 +109,13 @@ func (p *Provider) CreateStore(name string) (err error) {
 	defer func() {
 		closeErr := db.Close()
 		if closeErr != nil {
-			err = fmt.Errorf(failureWhileClosingMySQLConnection, closeErr)
+			if err == nil {
+				err = fmt.Errorf(failureWhileClosingMySQLConnection, closeErr)
+			} else {
+				secondErr := fmt.Sprintf("Additional error: %s",
+					fmt.Errorf(failureWhileClosingMySQLConnection, closeErr))
+				err = fmt.Errorf("error while creating new store: %w. %s", err, secondErr)
+			}
 		}
 	}()
 
