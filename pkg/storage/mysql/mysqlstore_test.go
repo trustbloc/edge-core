@@ -160,17 +160,17 @@ func TestSQLDBStore(t *testing.T) {
 		did2 := "did:example:789"
 		_, err = store.Get(did2)
 		require.Error(t, err)
-		require.Contains(t, storage.ErrValueNotFound.Error(), err.Error())
+		require.Contains(t, err.Error(), storage.ErrValueNotFound.Error())
 
 		// nil key
 		_, err = store.Get("")
 		require.Error(t, err)
-		require.Equal(t, storage.ErrKeyRequired, err)
+		require.EqualError(t, err, storage.ErrKeyRequired.Error())
 
 		// nil key
 		err = store.Put("", data)
 		require.Error(t, err)
-		require.Equal(t, storage.ErrKeyRequired, err)
+		require.EqualError(t, err, storage.ErrKeyRequired.Error())
 
 		err = prov.Close()
 		require.NoError(t, err)
@@ -184,7 +184,7 @@ func TestSQLDBStore(t *testing.T) {
 
 		_, err = prov.OpenStore("")
 		require.Error(t, err)
-		require.Equal(t, err.Error(), "store name is required")
+		require.EqualError(t, err, "store name is required")
 
 		// create store 1 & store 2
 		err = prov.CreateStore("store1")
@@ -242,31 +242,35 @@ func TestSQLDBStore(t *testing.T) {
 		// put err
 		err = storeErr.Put(commonKey, data)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to insert key and value record")
+		require.Contains(t, err.Error(),
+			"failure while executing insert statement on table : dial tcp 127.0.0.1:45454: "+
+				"connect: connection refused")
 
 		// get err
 		rows, err := storeErr.Get(commonKey)
 		require.Error(t, err)
 		require.Nil(t, rows)
-		require.Contains(t, err.Error(), "failed to get row")
+		require.EqualError(t, err,
+			"failure while querying row: dial tcp 127.0.0.1:45454: connect: connection refused")
 	})
 	t.Run("Test sql db store failures", func(t *testing.T) {
 		prov, err := NewProvider("")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), blankDBPathErrMsg)
+		require.EqualError(t, err, errBlankDBPath.Error())
 		require.Nil(t, prov)
 
 		// Invalid db path
 		_, err = NewProvider("root:@tcp(127.0.0.1:45454)")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to open MySQL")
+		require.Contains(t, err.Error(), "failure while opening MySQL connection")
 
 		prov, err = NewProvider(sqlStoreDBURL)
 		require.NoError(t, err)
 
 		store, err := prov.OpenStore("sample")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to use db")
+		require.EqualError(t, err,
+			`failure while executing USE query on DB sample: Error 1049: Unknown database 'sample'`)
 		require.Nil(t, store)
 	})
 	t.Run("Test the open new connection error", func(t *testing.T) {
@@ -278,14 +282,18 @@ func TestSQLDBStore(t *testing.T) {
 
 		_, err = prov.OpenStore("testErr")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to create new connection fake-url")
+		require.EqualError(t, err,
+			"failure while opening MySQL connection using url fake-url: invalid DSN: "+
+				"missing the slash separating the database name")
 
 		//  valid but not available db url
 		prov.dbURL = "root:my-secret-pw@tcp(127.0.0.1:3307)/"
 
 		_, err = prov.OpenStore("testErr")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to use db testErr")
+		require.EqualError(t, err,
+			"failure while executing USE query on DB testErr: dial tcp 127.0.0.1:3307: "+
+				"connect: connection refused")
 	})
 	t.Run("Test sqlDB multi store close by name", func(t *testing.T) {
 		prov, err := NewProvider(sqlStoreDBURL, WithDBPrefix(randomPrefix()))
@@ -354,8 +362,8 @@ func TestSQLDBStore(t *testing.T) {
 		resItr := sqlDBResultsIterator{&rows, result{}, nil}
 		res, err := resItr.Key()
 		require.Error(t, err)
-		require.Equal(t, "", res)
-		require.Contains(t, err.Error(), "failed to scan the SQL rows while getting key")
+		require.Empty(t, res)
+		require.EqualError(t, err, "failure while scanning rows: sql: Scan called without calling Next")
 	})
 	t.Run("Test result iterator value", func(t *testing.T) {
 		rows := sql.Rows{}
@@ -363,7 +371,7 @@ func TestSQLDBStore(t *testing.T) {
 		res, err := resItr.Value()
 		require.Error(t, err)
 		require.Nil(t, res)
-		require.Contains(t, err.Error(), "failed to scan the SQL rows while getting value")
+		require.EqualError(t, err, "failure while scanning rows: sql: Scan called without calling Next")
 	})
 }
 
@@ -415,7 +423,10 @@ func TestMySqlDBStore_query(t *testing.T) {
 		itr, e := store.Query(`""`)
 		require.Error(t, e)
 		require.Nil(t, itr)
-		require.Contains(t, e.Error(), "failed to query rows")
+		require.EqualError(t, e,
+			`failure while executing query: Error 1064: You have an error in your SQL syntax; `+
+				`check the manual that corresponds to your MySQL server version for the right syntax to`+
+				` use near '""' at line 1`)
 	})
 	t.Run("Successfully query using index", func(t *testing.T) {
 		err := createIndex(store, "`key`", storeName)
@@ -484,14 +495,14 @@ func TestMySqlDBStore_CreateIndex(t *testing.T) {
 		err = createIndex(store, "`key`", storeName)
 		require.NoError(t, err)
 
-		rows, err := sqlDBStore.db.Query("SELECT DISTINCT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS" +
+		rows, errQuery := sqlDBStore.db.Query("SELECT DISTINCT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS" +
 			" WHERE TABLE_NAME = 'store2';")
-		require.NoError(t, err)
+		require.NoError(t, errQuery)
 
 		var IndexName string
 		for rows.Next() {
-			err := rows.Scan(&IndexName)
-			require.NoError(t, err)
+			errScan := rows.Scan(&IndexName)
+			require.NoError(t, errScan)
 		}
 		require.Equal(t, testIndexName, IndexName)
 	})
@@ -499,8 +510,8 @@ func TestMySqlDBStore_CreateIndex(t *testing.T) {
 		sqlDBStore, ok := store.(*sqlDBStore)
 		require.True(t, ok)
 
-		db, err := sql.Open("mysql", "root:@tcp(127.0.0.1:45454)/")
-		require.NoError(t, err)
+		db, errOpen := sql.Open("mysql", "root:@tcp(127.0.0.1:45454)/")
+		require.NoError(t, errOpen)
 
 		sqlDBStore.db = db
 
@@ -509,31 +520,41 @@ func TestMySqlDBStore_CreateIndex(t *testing.T) {
 			IndexName:            testIndexName,
 			WhatToIndex:          "`key`",
 		}
-		err = sqlDBStore.CreateIndex(req)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to get indexes")
+		errOpen = sqlDBStore.CreateIndex(req)
+		require.Error(t, errOpen)
+		require.EqualError(t, errOpen,
+			"failure while getting indexes: failure while preparing index statement: "+
+				"dial tcp 127.0.0.1:45454: connect: connection refused")
 	})
 	t.Run("Fail to prepare get index statement", func(t *testing.T) {
 		sqlDBStore, ok := store.(*sqlDBStore)
 		require.True(t, ok)
 
-		db, err := sql.Open("mysql", "root:@tcp(127.0.0.1:45454)/")
-		require.NoError(t, err)
+		db, errOpen := sql.Open("mysql", "root:@tcp(127.0.0.1:45454)/")
+		require.NoError(t, errOpen)
 
 		sqlDBStore.db = db
-		indexes, err := sqlDBStore.getIndexes()
+		indexes, errOpen := sqlDBStore.getIndexes()
 		require.Nil(t, indexes)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to prepare index statement")
+		require.Error(t, errOpen)
+		require.EqualError(t, errOpen,
+			"failure while preparing index statement: dial tcp 127.0.0.1:45454: "+
+				"connect: connection refused")
 	})
 	t.Run("Fail to drop existing index", func(t *testing.T) {
+		err = prov.CreateStore("store3")
+		require.NoError(t, err)
+		store, err := prov.OpenStore("store3")
+		require.NoError(t, err)
 		sqlDBStore, ok := store.(*sqlDBStore)
 		require.True(t, ok)
 
 		indexes := []string{"test", "test_2"}
-		err := sqlDBStore.dropExistingIndex(indexes, storage.CreateIndexRequest{IndexName: "test"})
+		err = sqlDBStore.dropExistingIndex(indexes, storage.CreateIndexRequest{IndexName: "test"})
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to drop an existing index")
+		require.EqualError(t, err, `failure while executing drop index statement: Error 1064: You have`+
+			` an error in your SQL syntax; check the manual that corresponds to your MySQL server version `+
+			`for the right syntax to use near 'DROP INDEX test' at line 1`)
 	})
 
 	t.Run("Fail to create index - invalid index request", func(t *testing.T) {
@@ -546,7 +567,9 @@ func TestMySqlDBStore_CreateIndex(t *testing.T) {
 
 		err = createIndex(store, ``, "store1")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to create index Error")
+		require.EqualError(t, err, `failure while executing create index statement: Error 1064: `+
+			`You have an error in your SQL syntax; check the manual that corresponds to your MySQL server`+
+			` version for the right syntax to use near ')' at line 1`)
 	})
 }
 
@@ -572,7 +595,8 @@ func TestMySqlDBStore_Remove(t *testing.T) {
 
 		// Verify that the key-value pair was actually deleted
 		doc, err := store.Get(testKey)
-		require.Equal(t, storage.ErrValueNotFound, err)
+		require.Truef(t, errors.Is(err, storage.ErrValueNotFound),
+			`"%s" does not contain the expected error "%s"`, err, storage.ErrValueNotFound)
 		require.Empty(t, doc)
 	})
 	t.Run("Empty key", func(t *testing.T) {
@@ -586,7 +610,7 @@ func TestMySqlDBStore_Remove(t *testing.T) {
 		require.NoError(t, err)
 
 		err = store.Delete("")
-		require.Equal(t, storage.ErrKeyRequired, err)
+		require.EqualError(t, err, storage.ErrKeyRequired.Error())
 	})
 	t.Run("Key not found", func(t *testing.T) {
 		prov, err := NewProvider(sqlStoreDBURL)
@@ -599,8 +623,8 @@ func TestMySqlDBStore_Remove(t *testing.T) {
 		require.NoError(t, err)
 
 		err = store.Delete("ThisIsNotAStoredKey")
-		require.EqualError(t, err,
-			"failure during deletion: key not found (no rows were affected by delete query)")
+		require.Truef(t, errors.Is(err, errNoRowsAffectedByDeleteQuery),
+			`"%s" does not contain the expected error "%s"`, err, errNoRowsAffectedByDeleteQuery)
 	})
 	t.Run("Fail to delete row", func(t *testing.T) {
 		prov, err := NewProvider(sqlStoreDBURL)
@@ -619,8 +643,8 @@ func TestMySqlDBStore_Remove(t *testing.T) {
 
 		err = store.Delete("SomeKey")
 		require.EqualError(t, err,
-			"failure during deletion: failure while deleting row: Error 1146: "+
-				"Table 'testStore.someNonExistentTable' doesn't exist")
+			"failure while executing delete statement: Error 1146: Table "+
+				"'testStore.someNonExistentTable' doesn't exist")
 	})
 }
 

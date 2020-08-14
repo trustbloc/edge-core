@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"strconv"
 	"strings"
@@ -25,18 +26,12 @@ import (
 
 const (
 	logModuleName = "edge-core-couchdbstore"
-
-	blankHostErrMsg           = "hostURL for new CouchDB provider can't be blank"
-	failToCloseProviderErrMsg = "failed to close provider"
-	couchDBNotFoundErr        = "Not Found: missing"
-	getRevisionFailureErrMsg  = "failure while getting revision: %w"
-	getRawDocFailureErrMsg    = "failure while getting raw CouchDB document: %w"
 )
 
-var errMissingRevisionField = errors.New("the retrieved CouchDB document is missing the _rev field")
-var errFailToAssertRevAsString = errors.New("failed to assert the retrieved revision as a string")
-
 var logger = log.New(logModuleName)
+
+type marshalFunc func(interface{}) ([]byte, error)
+type readAllFunc func(io.Reader) ([]byte, error)
 
 // Option configures the couchdb provider
 type Option func(opts *Provider)
@@ -60,12 +55,12 @@ type Provider struct {
 // NewProvider instantiates Provider
 func NewProvider(hostURL string, opts ...Option) (*Provider, error) {
 	if hostURL == "" {
-		return nil, errors.New(blankHostErrMsg)
+		return nil, errBlankHost
 	}
 
 	client, err := kivik.New("couch", hostURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(failToInstantiateKivikClientErrMsg, err)
 	}
 
 	p := &Provider{hostURL: hostURL, couchDBClient: client, dbs: map[string]*CouchDBStore{}}
@@ -89,14 +84,24 @@ func (p *Provider) CreateStore(name string) error {
 
 	p.mux.Unlock()
 
-	if err != nil && err.Error() == "Precondition Failed: The database could not be created, the file already exists." {
-		return storage.ErrDuplicateStore
+	if err != nil {
+		if err.Error() == duplicateDBErrMsgFromKivik {
+			// Replace CouchDB "duplicate DB" error message with our own
+			// generic error that can checked for with errors.Is()
+			return fmt.Errorf(failureDuringCouchDBCreateDBCall, storage.ErrDuplicateStore)
+		}
+
+		return fmt.Errorf(failureDuringCouchDBCreateDBCall, err)
 	}
 
-	return err
+	return nil
 }
 
 // OpenStore opens an existing store with the given name and returns it.
+// If the store has been previously opened, it will be returned it from the local cache.
+// Note that if the underlying database was deleted by an external force, (i.e. not by using the CloseStore() method)
+// then this local cache will be invalid. To make it valid again, either a new Provider object needs to be created,
+// or Provider.CreateStore() needs to be called again with the same store name. TODO address this: #51
 func (p *Provider) OpenStore(name string) (storage.Store, error) {
 	p.mux.Lock()
 	defer p.mux.Unlock()
@@ -114,7 +119,7 @@ func (p *Provider) OpenStore(name string) (storage.Store, error) {
 	// If it's not in the cache, then let's ask the CouchDB server if it exists
 	existsOnServer, err := p.couchDBClient.DBExists(context.Background(), name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(dbExistsCheckFailure, err)
 	}
 
 	if !existsOnServer {
@@ -125,10 +130,10 @@ func (p *Provider) OpenStore(name string) (storage.Store, error) {
 
 	// db.Err() won't return an error if the database doesn't exist, hence the need for the explicit DBExists call above
 	if dbErr := db.Err(); dbErr != nil {
-		return nil, dbErr
+		return nil, fmt.Errorf(failureWhileConnectingToDBErrMsg, dbErr)
 	}
 
-	store := &CouchDBStore{db: db}
+	store := &CouchDBStore{db: db, marshal: json.Marshal, readAll: ioutil.ReadAll}
 
 	p.dbs[name] = store
 
@@ -151,7 +156,12 @@ func (p *Provider) CloseStore(name string) error {
 
 	delete(p.dbs, name)
 
-	return store.db.Close(context.Background())
+	err := store.db.Close(context.Background())
+	if err != nil {
+		return fmt.Errorf(failureDuringCouchDBCloseCall, err)
+	}
+
+	return nil
 }
 
 // Close closes the provider.
@@ -162,19 +172,27 @@ func (p *Provider) Close() error {
 	for _, store := range p.dbs {
 		err := store.db.Close(context.Background())
 		if err != nil {
-			return fmt.Errorf(failToCloseProviderErrMsg+": %w", err)
+			return fmt.Errorf(failureDuringCouchDBCloseCall, err)
 		}
 	}
 
-	return p.couchDBClient.Close(context.Background())
+	err := p.couchDBClient.Close(context.Background())
+	if err != nil {
+		return fmt.Errorf(failureWhileClosingKivikClient, err)
+	}
+
+	return nil
 }
 
 // CouchDBStore represents a CouchDB-backed database.
 type CouchDBStore struct {
-	db *kivik.DB
+	db      *kivik.DB
+	marshal marshalFunc
+	readAll readAllFunc
 }
 
 // Put stores the given key-value pair in the store.
+// If an existing document is found, it will be overwritten.
 func (c *CouchDBStore) Put(k string, v []byte) error {
 	var valueToPut []byte
 	if isJSON(v) {
@@ -184,79 +202,38 @@ func (c *CouchDBStore) Put(k string, v []byte) error {
 	}
 
 	revID, err := c.getRevID(k)
-	if err != nil {
-		return err
+	if err != nil && !errors.Is(err, storage.ErrValueNotFound) {
+		return fmt.Errorf(getRevIDFailureErrMsg, err)
 	}
 
 	if revID != "" {
 		valueToPut, err = c.addRevID(valueToPut, revID)
 		if err != nil {
-			return err
+			return fmt.Errorf(failureWhileAddingRevID, err)
 		}
 	}
 
 	_, err = c.db.Put(context.Background(), k, valueToPut)
 	if err != nil {
-		return fmt.Errorf("failed to store data: %w", err)
+		return fmt.Errorf(failureDuringCouchDBPutCall, err)
 	}
 
 	return nil
-}
-
-func isJSON(textToCheck []byte) bool {
-	var js map[string]interface{}
-	return json.Unmarshal(textToCheck, &js) == nil
-}
-
-// Kivik has a PutAttachment method, but it requires creating a document first and then adding an attachment after.
-// We want to do it all in one step, hence this manual stuff below.
-func wrapTextAsCouchDBAttachment(textToWrap []byte) []byte {
-	encodedTextToWrap := base64.StdEncoding.EncodeToString(textToWrap)
-	return []byte(`{"_attachments": {"data": {"data": "` + encodedTextToWrap + `", "content_type": "text/plain"}}}`)
 }
 
 // Get retrieves the value in the store associated with the given key.
 func (c *CouchDBStore) Get(k string) ([]byte, error) {
 	rawDoc, err := c.getRawDoc(k)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(getRawDocFailureErrMsg, err)
 	}
 
-	return c.getStoredValueFromRawDoc(rawDoc, k)
-}
-
-func (c *CouchDBStore) addRevID(valueToPut []byte, revID string) ([]byte, error) {
-	var m map[string]interface{}
-	if err := json.Unmarshal(valueToPut, &m); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal put value: %w", err)
-	}
-
-	m["_rev"] = revID
-
-	newValue, err := json.Marshal(m)
+	value, err := c.getStoredValueFromRawDoc(rawDoc, k)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal put value: %w", err)
+		return nil, fmt.Errorf(failureWhileGettingStoredValueFromRawDoc, err)
 	}
 
-	return newValue, nil
-}
-
-// get rev ID
-func (c *CouchDBStore) getRevID(k string) (string, error) {
-	rawDoc := make(map[string]interface{})
-
-	row := c.db.Get(context.Background(), k)
-
-	err := row.ScanDoc(&rawDoc)
-	if err != nil {
-		if strings.Contains(err.Error(), couchDBNotFoundErr) {
-			return "", nil
-		}
-
-		return "", err
-	}
-
-	return rawDoc["_rev"].(string), nil
+	return value, nil
 }
 
 // CreateIndex creates an index based on the provided CreateIndexRequest.
@@ -281,14 +258,14 @@ func (c *CouchDBStore) Query(findQuery string) (storage.ResultsIterator, error) 
 
 // Delete deletes the key-value pair associated with k.
 func (c *CouchDBStore) Delete(k string) error {
-	revString, err := c.getRevision(k)
+	revString, err := c.getRevID(k)
 	if err != nil {
-		return fmt.Errorf(storage.DeleteFailureErrMsg, err)
+		return fmt.Errorf(getRevIDFailureErrMsg, err)
 	}
 
 	_, err = c.db.Delete(context.Background(), k, revString)
 	if err != nil {
-		return fmt.Errorf(storage.DeleteFailureErrMsg, err)
+		return fmt.Errorf(failureDuringCouchDBDeleteCall, err)
 	}
 
 	return nil
@@ -311,24 +288,40 @@ func (i *couchDBResultsIterator) Next() (bool, error) {
 		logger.Warnf(warningMsg)
 	}
 
-	return nextCallResult, i.resultRows.Err()
+	err := i.resultRows.Err()
+	if err != nil {
+		return nextCallResult, fmt.Errorf(failureDuringIterationOfResultRows, err)
+	}
+
+	return nextCallResult, nil
 }
 
 // Release releases associated resources. Release should always result in success
 // and can be called multiple times without causing an error.
 func (i *couchDBResultsIterator) Release() error {
-	return i.resultRows.Close()
+	err := i.resultRows.Close()
+	if err != nil {
+		return fmt.Errorf(failureWhenClosingResultRows, err)
+	}
+
+	return nil
 }
 
 // Key returns the key of the current key-value pair.
+// A nil error likely means that the key list is exhausted.
 func (i *couchDBResultsIterator) Key() (string, error) {
 	key := i.resultRows.Key()
 	if key != "" {
 		// The returned key is a raw JSON string. It needs to be unescaped:
-		return strconv.Unquote(key)
+		str, err := strconv.Unquote(key)
+		if err != nil {
+			return "", fmt.Errorf(failureWhileUnquotingKey, err)
+		}
+
+		return str, nil
 	}
 
-	return key, nil
+	return "", nil
 }
 
 // Value returns the value of the current key-value pair.
@@ -336,54 +329,44 @@ func (i *couchDBResultsIterator) Value() ([]byte, error) {
 	rawDoc := make(map[string]interface{})
 
 	err := i.resultRows.ScanDoc(&rawDoc)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(failureWhileScanningResultRowsDoc, err)
 	}
 
 	key, err := i.Key()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(failureWhileGettingKeyFromIterator, err)
 	}
 
-	return i.store.getStoredValueFromRawDoc(rawDoc, key)
+	value, err := i.store.getStoredValueFromRawDoc(rawDoc, key)
+	if err != nil {
+		return nil, fmt.Errorf(failureWhileGettingStoredValueFromRawDoc, err)
+	}
+
+	return value, nil
 }
 
 func (c *CouchDBStore) getStoredValueFromRawDoc(rawDoc map[string]interface{}, k string) ([]byte, error) {
 	_, containsAttachment := rawDoc["_attachments"]
 	if containsAttachment {
-		return c.getDataFromAttachment(k)
+		data, err := c.getDataFromAttachment(k)
+		if err != nil {
+			return nil, fmt.Errorf(failureWhileGettingDataFromAttachment, err)
+		}
+
+		return data, nil
 	}
 
 	// Strip out the CouchDB-specific fields
 	delete(rawDoc, "_id")
 	delete(rawDoc, "_rev")
 
-	strippedJSON, err := json.Marshal(rawDoc)
+	strippedJSON, err := c.marshal(rawDoc)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(failureWhileMarshallingStrippedDoc, err)
 	}
 
 	return strippedJSON, nil
-}
-
-func (c *CouchDBStore) getRevision(k string) (string, error) {
-	rawDoc, err := c.getRawDoc(k)
-	if err != nil {
-		return "", fmt.Errorf(getRevisionFailureErrMsg, err)
-	}
-
-	rev, containsRev := rawDoc["_rev"]
-	if !containsRev {
-		return "", fmt.Errorf(getRevisionFailureErrMsg, errMissingRevisionField)
-	}
-
-	revString, ok := rev.(string)
-	if !ok {
-		return "", fmt.Errorf(getRevisionFailureErrMsg, errFailToAssertRevAsString)
-	}
-
-	return revString, nil
 }
 
 func (c *CouchDBStore) getRawDoc(k string) (map[string]interface{}, error) {
@@ -393,26 +376,73 @@ func (c *CouchDBStore) getRawDoc(k string) (map[string]interface{}, error) {
 
 	err := row.ScanDoc(&rawDoc)
 	if err != nil {
-		if strings.Contains(err.Error(), couchDBNotFoundErr) {
-			return nil, fmt.Errorf(getRawDocFailureErrMsg, storage.ErrValueNotFound)
+		if strings.Contains(err.Error(), docNotFoundErrMsgFromKivik) {
+			return nil, fmt.Errorf(failureWhileScanningResultRowsDoc, storage.ErrValueNotFound)
 		}
 
-		return nil, fmt.Errorf(getRawDocFailureErrMsg, err)
+		return nil, fmt.Errorf(failureWhileScanningResultRowsDoc, err)
 	}
 
 	return rawDoc, nil
 }
 
+func (c *CouchDBStore) getRevID(k string) (string, error) {
+	rawDoc, err := c.getRawDoc(k)
+	if err != nil {
+		return "", fmt.Errorf(getRawDocFailureErrMsg, err)
+	}
+
+	revID, containsRevID := rawDoc["_rev"]
+	if !containsRevID {
+		return "", errMissingRevIDField
+	}
+
+	revIDString, ok := revID.(string)
+	if !ok {
+		return "", errFailToAssertRevIDAsString
+	}
+
+	return revIDString, nil
+}
+
 func (c *CouchDBStore) getDataFromAttachment(k string) ([]byte, error) {
 	attachment, err := c.db.GetAttachment(context.Background(), k, "data")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(failureDuringCouchDBGetAttachmentCall, err)
 	}
 
-	data, err := ioutil.ReadAll(attachment.Content)
+	data, err := c.readAll(attachment.Content)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(failureWhileReadingAttachmentContent, err)
 	}
 
 	return data, nil
+}
+
+func (c *CouchDBStore) addRevID(valueToPut []byte, revID string) ([]byte, error) {
+	var m map[string]interface{}
+	if err := json.Unmarshal(valueToPut, &m); err != nil {
+		return nil, fmt.Errorf(failureWhileUnmarshallingPutValue, err)
+	}
+
+	m["_rev"] = revID
+
+	newValue, err := c.marshal(m)
+	if err != nil {
+		return nil, fmt.Errorf(failureWhileMarshallingPutValueWithNewlyAddedRevID, err)
+	}
+
+	return newValue, nil
+}
+
+func isJSON(textToCheck []byte) bool {
+	var js map[string]interface{}
+	return json.Unmarshal(textToCheck, &js) == nil
+}
+
+// Kivik has a PutAttachment method, but it requires creating a document first and then adding an attachment after.
+// We want to do it all in one step, hence this manual stuff below.
+func wrapTextAsCouchDBAttachment(textToWrap []byte) []byte {
+	encodedTextToWrap := base64.StdEncoding.EncodeToString(textToWrap)
+	return []byte(`{"_attachments": {"data": {"data": "` + encodedTextToWrap + `", "content_type": "text/plain"}}}`)
 }
