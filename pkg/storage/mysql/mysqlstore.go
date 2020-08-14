@@ -7,7 +7,6 @@ package mysql
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -16,6 +15,11 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/trustbloc/edge-core/pkg/storage"
+)
+
+const (
+	createDBQuery = "CREATE DATABASE IF NOT EXISTS "
+	useDBQuery    = "USE "
 )
 
 // Option configures the couchdb provider
@@ -46,36 +50,28 @@ type result struct {
 	value []byte
 }
 
-const (
-	blankDBPathErrMsg         = "DB URL for new mySQL DB provider can't be blank"
-	failToCloseProviderErrMsg = "failed to close provider"
-	sqlDBNotFound             = "no rows"
-	createDBQuery             = "CREATE DATABASE IF NOT EXISTS "
-	useDBQuery                = "USE "
-)
-
 // NewProvider instantiates Provider.
 // Example DB Path root:my-secret-pw@tcp(127.0.0.1:3306)/.
 func NewProvider(dbPath string, opts ...Option) (p *Provider, err error) {
 	if dbPath == "" {
-		return nil, errors.New(blankDBPathErrMsg)
+		return nil, errBlankDBPath
 	}
 
 	db, err := sql.Open("mysql", dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open MySQL using url %s : %w", dbPath, err)
+		return nil, fmt.Errorf(failureWhileOpeningMySQLConnectionErrMsg, dbPath, err)
 	}
 
 	defer func() {
 		closeErr := db.Close()
 		if closeErr != nil {
-			err = fmt.Errorf("%s : failed to close db connection : %w", err, closeErr)
+			err = fmt.Errorf(failureWhileClosingMySQLConnection, closeErr)
 		}
 	}()
 
 	err = db.Ping()
 	if err != nil {
-		return nil, fmt.Errorf("failed to ping MySQL at url %s : %w", dbPath, err)
+		return nil, fmt.Errorf(failureWhilePingingMySQLErrMsg, dbPath, err)
 	}
 
 	p = &Provider{
@@ -86,13 +82,13 @@ func NewProvider(dbPath string, opts ...Option) (p *Provider, err error) {
 		opt(p)
 	}
 
-	return p, err
+	return p, nil
 }
 
 // CreateStore creates a store with the given name.
 func (p *Provider) CreateStore(name string) (err error) {
 	if name == "" {
-		return errors.New("store name is required")
+		return errBlankStoreName
 	}
 
 	if p.dbPrefix != "" {
@@ -101,26 +97,26 @@ func (p *Provider) CreateStore(name string) (err error) {
 
 	db, err := sql.Open("mysql", p.dbURL)
 	if err != nil {
-		return fmt.Errorf("failed to open connection: %w", err)
+		return fmt.Errorf(failureWhileOpeningMySQLConnectionErrMsg, p.dbURL, err)
 	}
 
 	defer func() {
 		closeErr := db.Close()
 		if closeErr != nil {
-			err = fmt.Errorf("%s : failed to close db connection : %w", err, closeErr)
+			err = fmt.Errorf(failureWhileClosingMySQLConnection, closeErr)
 		}
 	}()
 
 	// creating the database
 	_, err = db.Exec(createDBQuery + name)
 	if err != nil {
-		return fmt.Errorf("failed to create db %s: %w", name, err)
+		return fmt.Errorf(failureWhileCreatingDBErrMsg, name, err)
 	}
 
 	// Use Query is used to select the created database without this DDL operations are not permitted
 	_, err = db.Exec(useDBQuery + name)
 	if err != nil {
-		return fmt.Errorf("failed to use db %s: %w", name, err)
+		return fmt.Errorf(failureWhileExecutingUseQueryErrMsg, name, err)
 	}
 
 	// key has max varchar size it can accommodate as per mysql 8.0 spec
@@ -130,20 +126,19 @@ func (p *Provider) CreateStore(name string) (err error) {
 	// creating key-value table inside the database
 	_, err = db.Exec(createTableStmt)
 	if err != nil {
-		return fmt.Errorf("failed to create table %s: %w", name, err)
+		return fmt.Errorf(failureWhileCreatingTableErrMsg, name, err)
 	}
 
 	return nil
 }
 
-// OpenStore opens and returns a new db with the given name space
-// TODO OpenStore should not automatically create a store if it doesn't exist #47
+// OpenStore opens and returns a new DB with the given namespace
 func (p *Provider) OpenStore(name string) (storage.Store, error) {
 	p.Lock()
 	defer p.Unlock()
 
 	if name == "" {
-		return nil, errors.New("store name is required")
+		return nil, errBlankStoreName
 	}
 
 	if p.dbPrefix != "" {
@@ -153,13 +148,14 @@ func (p *Provider) OpenStore(name string) (storage.Store, error) {
 	// Opening new db connection
 	newDBConn, err := sql.Open("mysql", p.dbURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create new connection %s: %w", p.dbURL, err)
+		return nil, fmt.Errorf(failureWhileOpeningMySQLConnectionErrMsg, p.dbURL, err)
 	}
 
-	// Use Query is used to select the created database without this DDL operations are not permitted
+	// Use Query is used to select the created database.
+	// Without this, DDL operations are not permitted.
 	_, err = newDBConn.Exec(useDBQuery + name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to use db %s: %w", name, err)
+		return nil, fmt.Errorf(failureWhileExecutingUseQueryErrMsg, name, err)
 	}
 
 	store := &sqlDBStore{
@@ -179,7 +175,7 @@ func (p *Provider) Close() error {
 	for _, store := range p.dbs {
 		err := store.db.Close()
 		if err != nil {
-			return fmt.Errorf(failToCloseProviderErrMsg+": %w", err)
+			return fmt.Errorf(failureWhileClosingMySQLConnection, err)
 		}
 	}
 
@@ -204,7 +200,12 @@ func (p *Provider) CloseStore(name string) error {
 
 	delete(p.dbs, name)
 
-	return store.db.Close()
+	err := store.db.Close()
+	if err != nil {
+		return fmt.Errorf(failureWhileClosingMySQLConnection, err)
+	}
+
+	return nil
 }
 
 // Put stores the key and the value
@@ -220,7 +221,7 @@ func (s *sqlDBStore) Put(k string, v []byte) error {
 	// executing the prepared insert statement
 	_, err := s.db.Exec(createStmt, k, v, v)
 	if err != nil {
-		return fmt.Errorf("failed to insert key and value record into %s %w ", s.tableName, err)
+		return fmt.Errorf(failureWhileExecutingInsertStatementErrMsg, s.tableName, err)
 	}
 
 	return nil
@@ -229,7 +230,7 @@ func (s *sqlDBStore) Put(k string, v []byte) error {
 // Get fetches the value based on key
 func (s *sqlDBStore) Get(k string) ([]byte, error) {
 	if k == "" {
-		return nil, errors.New("key is mandatory")
+		return nil, storage.ErrKeyRequired
 	}
 
 	var value []byte
@@ -239,11 +240,11 @@ func (s *sqlDBStore) Get(k string) ([]byte, error) {
 	err := s.db.QueryRow("SELECT `value` FROM "+s.tableName+" "+
 		" WHERE `key` = ?", k).Scan(&value)
 	if err != nil {
-		if strings.Contains(err.Error(), sqlDBNotFound) {
-			return nil, storage.ErrValueNotFound
+		if strings.Contains(err.Error(), valueNotFoundErrMsgFromMySQL) {
+			return nil, fmt.Errorf(failureWhileQueryingRowErrMsg, storage.ErrValueNotFound)
 		}
 
-		return nil, fmt.Errorf("failed to get row %w", err)
+		return nil, fmt.Errorf(failureWhileQueryingRowErrMsg, err)
 	}
 
 	return value, nil
@@ -259,12 +260,12 @@ func (s *sqlDBStore) CreateIndex(createIndexRequest storage.CreateIndexRequest) 
 	// get all the created indexes
 	indexes, err := s.getIndexes()
 	if err != nil {
-		return fmt.Errorf("failed to get indexes: %s", err)
+		return fmt.Errorf(failureWhileGettingIndexesErrMsg, err)
 	}
 	// if an index exits, drop it as sql throws duplicate key_name error
 	err = s.dropExistingIndex(indexes, createIndexRequest)
 	if err != nil {
-		return fmt.Errorf("failed to drop an existing index: %s", err)
+		return fmt.Errorf(failureWhileDroppingIndexesErrMsg, err)
 	}
 	// create an index
 	// todo issue-38 to sanitize input
@@ -273,7 +274,70 @@ func (s *sqlDBStore) CreateIndex(createIndexRequest storage.CreateIndexRequest) 
 
 	_, err = s.db.Exec(createIndexStmt)
 	if err != nil {
-		return fmt.Errorf("failed to create index %w", err)
+		return fmt.Errorf(failureWhileExecutingCreateIndexStatementErrMsg, err)
+	}
+
+	return nil
+}
+
+func (s *sqlDBStore) Query(findQuery string) (storage.ResultsIterator, error) {
+	resultRows, err := s.db.Query(findQuery)
+	if err != nil {
+		return nil, fmt.Errorf(failureWhileQueryDBErrMsg, err)
+	}
+
+	return &sqlDBResultsIterator{resultRows: resultRows}, nil
+}
+
+func (s *sqlDBStore) Delete(k string) error {
+	if k == "" {
+		return storage.ErrKeyRequired
+	}
+
+	//nolint: gosec
+	// TODO address SQL injection warning #38
+	result, err := s.db.Exec("DELETE FROM `"+s.tableName+"` WHERE `key`= ?", k)
+	if err != nil {
+		return fmt.Errorf(failureWhileDeleteFromTableErrMsg, err)
+	}
+
+	err = checkDeleteResult(result)
+	if err != nil {
+		return fmt.Errorf(failureWhileCheckingDeleteResultErrMsg, err)
+	}
+
+	return nil
+}
+
+// Key returns the key of the current key-value pair.
+func (i *sqlDBResultsIterator) Key() (string, error) {
+	err := i.resultRows.Scan(&i.result.key, &i.result.value)
+	if err != nil {
+		return "", fmt.Errorf(failureWhilleScanningRowsErrMsg, err)
+	}
+
+	return i.result.key, nil
+}
+
+// Value returns the value of the current key-value pair.
+func (i *sqlDBResultsIterator) Value() ([]byte, error) {
+	err := i.resultRows.Scan(&i.result.key, &i.result.value)
+	if err != nil {
+		return nil, fmt.Errorf(failureWhilleScanningRowsErrMsg, err)
+	}
+
+	return i.result.value, nil
+}
+
+func (i *sqlDBResultsIterator) Next() (bool, error) {
+	nextCallResult := i.resultRows.Next()
+
+	return nextCallResult, i.resultRows.Err()
+}
+
+func (i *sqlDBResultsIterator) Release() error {
+	if err := i.resultRows.Close(); err != nil {
+		return fmt.Errorf(failureWhileReleasingResultRows, err)
 	}
 
 	return nil
@@ -284,12 +348,12 @@ func (s *sqlDBStore) getIndexes() ([]string, error) {
 
 	indexStmt, err := s.db.Prepare(getIndexStmt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to prepare index statement: %w", err)
+		return nil, fmt.Errorf(failureWhilePreparingIndexStatementErrMsg, err)
 	}
 
 	rows, err := indexStmt.Query(s.tableName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query select index statement: %w", err)
+		return nil, fmt.Errorf(failureWhileExecutingSelectIndexStatementErrMsg, err)
 	}
 
 	var index string
@@ -299,7 +363,7 @@ func (s *sqlDBStore) getIndexes() ([]string, error) {
 	for rows.Next() {
 		err := rows.Scan(&index)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan the rows: %w", err)
+			return nil, fmt.Errorf(failureWhilleScanningRowsErrMsg, err)
 		}
 
 		indexes = append(indexes, index)
@@ -317,7 +381,7 @@ func (s *sqlDBStore) dropExistingIndex(indexes []string, createIndexRequest stor
 
 			_, err := s.db.Exec(dropIndexStmt)
 			if err != nil {
-				return fmt.Errorf("failed to drop an existing index: %w", err)
+				return fmt.Errorf(failureWhileExecutingDropIndexStatementErrMsg, err)
 			}
 		}
 	}
@@ -325,74 +389,14 @@ func (s *sqlDBStore) dropExistingIndex(indexes []string, createIndexRequest stor
 	return nil
 }
 
-func (s *sqlDBStore) Query(findQuery string) (storage.ResultsIterator, error) {
-	resultRows, err := s.db.Query(findQuery)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query rows %w", err)
-	}
-
-	return &sqlDBResultsIterator{resultRows: resultRows}, nil
-}
-
-func (s *sqlDBStore) Delete(k string) error {
-	if k == "" {
-		return storage.ErrKeyRequired
-	}
-
-	//nolint: gosec
-	// TODO address SQL injection warning #38
-	result, err := s.db.Exec("DELETE FROM `"+s.tableName+"` WHERE `key`= ?", k)
-	if err != nil {
-		return fmt.Errorf(storage.DeleteFailureErrMsg, fmt.Errorf("failure while deleting row: %w", err))
-	}
-
-	return checkDeleteResult(result)
-}
-
 func checkDeleteResult(result sql.Result) error {
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf(storage.DeleteFailureErrMsg,
-			fmt.Errorf("failure while retrieving number of rows affected: %w", err))
+		return fmt.Errorf(failureWhileGettingRowsAffectedErrMsg, err)
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf(storage.DeleteFailureErrMsg,
-			errors.New("key not found (no rows were affected by delete query)"))
-	}
-
-	return nil
-}
-
-// Key returns the key of the current key-value pair.
-func (i *sqlDBResultsIterator) Key() (string, error) {
-	err := i.resultRows.Scan(&i.result.key, &i.result.value)
-	if err != nil {
-		return "", fmt.Errorf("failed to scan the SQL rows while getting key: %w", err)
-	}
-
-	return i.result.key, nil
-}
-
-// Value returns the value of the current key-value pair.
-func (i *sqlDBResultsIterator) Value() ([]byte, error) {
-	err := i.resultRows.Scan(&i.result.key, &i.result.value)
-	if err != nil {
-		return nil, fmt.Errorf("failed to scan the SQL rows while getting value: %w", err)
-	}
-
-	return i.result.value, nil
-}
-
-func (i *sqlDBResultsIterator) Next() (bool, error) {
-	nextCallResult := i.resultRows.Next()
-
-	return nextCallResult, i.resultRows.Err()
-}
-
-func (i *sqlDBResultsIterator) Release() error {
-	if err := i.resultRows.Close(); err != nil {
-		return fmt.Errorf("failed to release result rows: %w", i.err)
+		return errNoRowsAffectedByDeleteQuery
 	}
 
 	return nil

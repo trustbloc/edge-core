@@ -31,7 +31,7 @@ func TestProvider_CreateStore(t *testing.T) {
 		require.NoError(t, err)
 
 		err = provider.CreateStore(testStoreName)
-		require.Equal(t, storage.ErrDuplicateStore, err)
+		require.EqualError(t, err, storage.ErrDuplicateStore.Error())
 	})
 }
 
@@ -51,7 +51,7 @@ func TestMemStore_OpenStore(t *testing.T) {
 
 		newStore, err := provider.OpenStore(testStoreName)
 		require.Nil(t, newStore)
-		require.Equal(t, storage.ErrStoreNotFound, err)
+		require.EqualError(t, err, storage.ErrStoreNotFound.Error())
 	})
 }
 
@@ -78,7 +78,7 @@ func TestProvider_CloseStore(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = newStore.Get("something")
-		require.Equal(t, storage.ErrValueNotFound, err)
+		require.EqualError(t, err, storage.ErrValueNotFound.Error())
 
 		require.Equal(t, 1, len(provider.dbs))
 	})
@@ -86,7 +86,7 @@ func TestProvider_CloseStore(t *testing.T) {
 		provider := NewProvider()
 
 		err := provider.CloseStore(testStoreName)
-		require.Equal(t, storage.ErrStoreNotFound, err)
+		require.EqualError(t, err, storage.ErrStoreNotFound.Error())
 	})
 }
 
@@ -136,13 +136,13 @@ func TestMemStore_Get(t *testing.T) {
 func TestMemStore_CreateIndex(t *testing.T) {
 	memStore := &MemStore{}
 	err := memStore.CreateIndex(storage.CreateIndexRequest{})
-	require.Equal(t, storage.ErrIndexingNotSupported, err)
+	require.EqualError(t, err, storage.ErrIndexingNotSupported.Error())
 }
 
 func TestMemStore_Query(t *testing.T) {
 	memStore := &MemStore{}
 	itr, err := memStore.Query("")
-	require.Equal(t, storage.ErrQueryingNotSupported, err)
+	require.EqualError(t, err, storage.ErrQueryingNotSupported.Error())
 	require.Nil(t, itr)
 }
 
@@ -167,7 +167,7 @@ func TestMemStore_Remove(t *testing.T) {
 
 		// Verify that the key-value pair was actually deleted
 		doc, err := store.Get(testKey)
-		require.Equal(t, storage.ErrValueNotFound, err)
+		require.EqualError(t, err, storage.ErrValueNotFound.Error())
 		require.Empty(t, doc)
 	})
 	t.Run("Key-value pair does not exist", func(t *testing.T) {

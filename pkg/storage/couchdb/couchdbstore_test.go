@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -37,6 +38,8 @@ const (
 )
 
 var testLogger = &TestLogger{} //nolint: gochecknoglobals
+var errFailingMarshal = errors.New("failingMarshal always fails")
+var errFailingReadAll = errors.New("failingReadAll always fails")
 
 // For these unit tests to run, you must ensure you have a CouchDB instance running at the URL specified in couchDBURL.
 // 'make unit-test' from the terminal will take care of this for you.
@@ -46,27 +49,27 @@ type TestLogger struct {
 	logContents string
 }
 
-func (t *TestLogger) Fatalf(msg string, args ...interface{}) {
+func (t *TestLogger) Fatalf(msg string, _ ...interface{}) {
 	t.logContents = msg
 }
 
-func (t *TestLogger) Panicf(msg string, args ...interface{}) {
+func (t *TestLogger) Panicf(msg string, _ ...interface{}) {
 	t.logContents = msg
 }
 
-func (t *TestLogger) Debugf(msg string, args ...interface{}) {
+func (t *TestLogger) Debugf(msg string, _ ...interface{}) {
 	t.logContents = msg
 }
 
-func (t *TestLogger) Infof(msg string, args ...interface{}) {
+func (t *TestLogger) Infof(msg string, _ ...interface{}) {
 	t.logContents = msg
 }
 
-func (t *TestLogger) Warnf(msg string, args ...interface{}) {
+func (t *TestLogger) Warnf(msg string, _ ...interface{}) {
 	t.logContents = msg
 }
 
-func (t *TestLogger) Errorf(msg string, args ...interface{}) {
+func (t *TestLogger) Errorf(msg string, _ ...interface{}) {
 	t.logContents = msg
 }
 
@@ -122,7 +125,7 @@ func TestNewProvider(t *testing.T) {
 	})
 	t.Run("Blank URL provided", func(t *testing.T) {
 		provider, err := NewProvider("")
-		require.Equal(t, blankHostErrMsg, err.Error())
+		require.EqualError(t, err, errBlankHost.Error())
 		require.Nil(t, provider)
 	})
 
@@ -148,14 +151,17 @@ func TestProvider_CreateStore(t *testing.T) {
 		require.NoError(t, err)
 
 		err = provider.CreateStore(testStoreName)
-		require.Equal(t, storage.ErrDuplicateStore.Error(), err.Error())
+		require.Truef(t, errors.Is(err, storage.ErrDuplicateStore),
+			`"%s" does not contain the expected error "%s"`, err, storage.ErrDuplicateStore)
 	})
 	t.Run("Attempt to create a store with an incompatible name", func(t *testing.T) {
 		provider := initializeTest(t)
 
 		err := provider.CreateStore("BadName")
-		require.Equal(t, "Bad Request: Name: 'BadName'. Only lowercase characters (a-z), digits (0-9),"+
-			" and any of the characters _, $, (, ), +, -, and / are allowed. Must begin with a letter.", err.Error())
+		require.Error(t, err)
+		require.Contains(t, err.Error(),
+			"Bad Request: Name: 'BadName'. Only lowercase characters (a-z), digits (0-9),"+
+				" and any of the characters _, $, (, ), +, -, and / are allowed. Must begin with a letter.")
 	})
 }
 
@@ -190,14 +196,15 @@ func TestProvider_OpenStore(t *testing.T) {
 
 		newStore, err := provider.OpenStore(testStoreName)
 		require.Nil(t, newStore)
-		require.Equal(t, storage.ErrStoreNotFound, err)
+		require.EqualError(t, err, storage.ErrStoreNotFound.Error())
 	})
 	t.Run("Attempt to open a store with a blank name", func(t *testing.T) {
 		provider := initializeTest(t)
 
 		newStore, err := provider.OpenStore("")
 		require.Nil(t, newStore)
-		require.Equal(t, "kivik: dbName required", err.Error())
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "kivik: dbName required")
 	})
 }
 
@@ -214,7 +221,7 @@ func TestProvider_CloseStore(t *testing.T) {
 		provider := initializeTest(t)
 
 		err := provider.CloseStore(testStoreName)
-		require.Equal(t, storage.ErrStoreNotFound, err)
+		require.EqualError(t, err, storage.ErrStoreNotFound.Error())
 	})
 }
 
@@ -228,7 +235,7 @@ func TestProvider_Close(t *testing.T) {
 }
 
 func TestCouchDBStore_Put(t *testing.T) {
-	t.Run("Value is JSON", func(t *testing.T) {
+	t.Run("Success: value is JSON", func(t *testing.T) {
 		provider := initializeTest(t)
 
 		store := createAndOpenTestStore(t, provider)
@@ -236,14 +243,30 @@ func TestCouchDBStore_Put(t *testing.T) {
 		err := store.Put(testDocKey, []byte(testJSONValue1))
 		require.NoError(t, err)
 	})
-
-	t.Run("Value is not JSON", func(t *testing.T) {
+	t.Run("Success: value is not JSON", func(t *testing.T) {
 		provider := initializeTest(t)
 
 		store := createAndOpenTestStore(t, provider)
 
 		err := store.Put(testDocKey, []byte(testNonJSONValue))
 		require.NoError(t, err)
+	})
+	t.Run("Error while adding rev ID", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey, []byte(testJSONValue1))
+		require.NoError(t, err)
+
+		couchDBStore, ok := store.(*CouchDBStore)
+		require.True(t, ok, "failed to assert store as a *CouchDBStore")
+
+		couchDBStore.marshal = failingMarshal
+
+		err = store.Put(testDocKey, []byte(testJSONValue1))
+		require.EqualError(t, err, "failure while adding rev ID: failure while unmarshalling put "+
+			"value with newly added rev ID: failingMarshal always fails")
 	})
 }
 
@@ -297,6 +320,42 @@ func TestCouchDBStore_Get(t *testing.T) {
 		require.Truef(t, errors.Is(err, storage.ErrValueNotFound),
 			`"%s" does not contain the expected error "%s"`, err, storage.ErrValueNotFound)
 	})
+	t.Run("Failure while getting stored value from raw doc", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey, []byte(testJSONValue))
+		require.NoError(t, err)
+
+		couchDBStore, ok := store.(*CouchDBStore)
+		require.True(t, ok, "failed to assert store as a *CouchDBStore")
+
+		couchDBStore.marshal = failingMarshal
+
+		value, err := couchDBStore.Get(testDocKey)
+		require.EqualError(t, err, "failure while getting stored value from raw doc: failure while "+
+			"marshalling stripped doc: failingMarshal always fails")
+		require.Nil(t, value)
+	})
+	t.Run("Failure while getting data from attachment", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey, []byte(testNonJSONValue))
+		require.NoError(t, err)
+
+		couchDBStore, ok := store.(*CouchDBStore)
+		require.True(t, ok, "failed to assert store as a *CouchDBStore")
+
+		couchDBStore.readAll = failingReadAll
+
+		value, err := store.Get(testDocKey)
+		require.EqualError(t, err, "failure while getting stored value from raw doc: failure while "+
+			"getting data from attachment: failure while reading attachment content: failingReadAll always fails")
+		require.Nil(t, value)
+	})
 }
 
 func TestCouchDBStore_getDataFromAttachment(t *testing.T) {
@@ -323,7 +382,8 @@ func TestCouchDBStore_getDataFromAttachment(t *testing.T) {
 
 		data, err := provider.dbs[testStoreName].getDataFromAttachment(testDocKey)
 		require.Nil(t, data)
-		require.Equal(t, "Not Found: Document is missing attachment", err.Error())
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "Not Found: Document is missing attachment")
 	})
 }
 
@@ -506,8 +566,43 @@ func TestCouchDBStore_ResultsIterator(t *testing.T) {
 		// Kivik closes its iterator automatically when its exhausted.
 		// When calling itr.Value(), we should expect an error telling us that it's already closed.
 		value, err := itr.Value()
-		require.EqualError(t, err, "kivik: Iterator is closed")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "kivik: Iterator is closed")
 		require.Nil(t, value)
+		err = itr.Release()
+		require.NoError(t, err)
+	})
+	t.Run("Failure while getting stored value from raw doc", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		rawData := make(map[string][]byte)
+		rawData[testDocKey] = []byte(testJSONValue)
+
+		for k, v := range rawData {
+			err := store.Put(k, v)
+			require.NoError(t, err)
+		}
+
+		couchDBStore, ok := store.(*CouchDBStore)
+		require.True(t, ok)
+
+		couchDBStore.marshal = failingMarshal
+
+		rows, err := couchDBStore.db.AllDocs(context.Background(), kivik.Options{"include_docs": true})
+		require.NoError(t, err)
+
+		itr := couchDBResultsIterator{resultRows: rows, store: couchDBStore}
+
+		nextOK, nextErr := itr.Next()
+		require.NoError(t, nextErr)
+		require.True(t, nextOK)
+		itrValue, valueErr := itr.Value()
+		require.EqualError(t, valueErr, "failure while getting stored value from raw doc: "+
+			"failure while marshalling stripped doc: failingMarshal always fails")
+		require.Nil(t, itrValue)
+
 		err = itr.Release()
 		require.NoError(t, err)
 	})
@@ -533,6 +628,14 @@ func TestCouchDBStore_Remove(t *testing.T) {
 		err := store.Delete(testDocKey)
 		require.Truef(t, errors.Is(err, storage.ErrValueNotFound),
 			`"%s" does not contain the expected error "%s"`, err, storage.ErrValueNotFound)
+	})
+}
+
+func TestCouchDBStore_addRevID(t *testing.T) {
+	t.Run("Fail to unmarshal", func(t *testing.T) {
+		value, err := (&CouchDBStore{}).addRevID(nil, "")
+		require.EqualError(t, err, "failure while unmarshalling put value: unexpected end of JSON input")
+		require.Nil(t, value)
 	})
 }
 
@@ -578,4 +681,12 @@ func createIndex(store storage.Store, whatToIndex string) error {
 	}
 
 	return store.CreateIndex(createIndexRequest)
+}
+
+func failingMarshal(_ interface{}) ([]byte, error) {
+	return nil, errFailingMarshal
+}
+
+func failingReadAll(_ io.Reader) ([]byte, error) {
+	return nil, errFailingReadAll
 }
