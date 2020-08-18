@@ -23,7 +23,7 @@ var (
 // It is required to call this function before making any loggings for using custom loggers.
 func Initialize(l LoggerProvider) {
 	loggerProviderOnce.Do(func() {
-		loggerProviderInstance = &modlogProvider{l}
+		loggerProviderInstance = l
 		logger := loggerProviderInstance.GetLogger(loggerModule)
 		logger.Debugf("Logger provider initialized")
 	})
