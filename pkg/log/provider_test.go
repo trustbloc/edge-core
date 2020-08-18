@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/trustbloc/edge-core/pkg/internal/logging/modlog"
 )
 
@@ -22,10 +24,7 @@ func TestCustomLogger(t *testing.T) {
 	// initialize logger provider with custom logger provider
 	Initialize(newCustomProvider(module))
 
-	// get logger instance
-	logger := New(module)
-
-	modlog.VerifyCustomLogger(t, logger, module)
+	require.NotPanics(t, func() { New(module).Infof("Test") })
 }
 
 // newCustomProvider return new sample logging provider to demonstrate custom logging provider

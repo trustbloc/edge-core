@@ -442,9 +442,6 @@ func TestCouchDBStore_Query(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, ok)
 
-		// Check to make sure an "index not used" warning didn't get logged
-		require.Empty(t, testLogger.logContents)
-
 		err = itr.Release()
 		require.NoError(t, err)
 	})
@@ -480,10 +477,6 @@ func TestCouchDBStore_Query(t *testing.T) {
 			require.NoError(t, err)
 			require.False(t, ok)
 
-			// Confirm that an "index not used" warning got logged
-			// Note that Kivik only sets the warning value after all the rows have been iterated through.
-			require.Contains(t, testLogger.logContents, "_design/"+testDesignDoc+", "+testIndexName+" was not used because "+
-				"it is not a valid index for this query.")
 			err = itr.Release()
 			require.NoError(t, err)
 		})
