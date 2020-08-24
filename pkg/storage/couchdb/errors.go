@@ -33,6 +33,8 @@ const (
 	failureWhenClosingResultRows             = "failure when closing result rows: %w"
 	failureWhileUnquotingKey                 = "failure while unquoting key: %w"
 	failureWhileGettingKeyFromIterator       = "failure while getting key from iterator: %w"
+	failureWhileGettingAllDocs               = "failure while getting all docs: %w"
+	failureWhileGettingAllKeyValuePairs      = "failure while getting all key-value pairs: %w"
 
 	// Error messages returned from Kivik CouchDB client that we directly check for
 	duplicateDBErrMsgFromKivik = "Precondition Failed: The database could not be created, the file already exists."

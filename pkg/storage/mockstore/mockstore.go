@@ -56,6 +56,7 @@ type MockStore struct {
 	Store                   map[string][]byte
 	lock                    sync.RWMutex
 	ErrPut                  error
+	ErrGetAll               error
 	ErrGet                  error
 	ErrCreateIndex          error
 	ErrQuery                error
@@ -74,6 +75,11 @@ func (s *MockStore) Put(k string, v []byte) error {
 	s.lock.Unlock()
 
 	return s.ErrPut
+}
+
+// GetAll fetches all the key-value pairs within this store.
+func (s *MockStore) GetAll() (map[string][]byte, error) {
+	return s.Store, s.ErrGetAll
 }
 
 // Get fetches the value associated with the given key

@@ -122,6 +122,19 @@ func TestMemStore_Put(t *testing.T) {
 	require.Equal(t, "someValue", string(value))
 }
 
+func TestMemStore_GetAll(t *testing.T) {
+	store := MemStore{db: make(map[string][]byte)}
+
+	store.db["testKey"] = []byte("testValue")
+	store.db["testKey2"] = []byte("testValue2")
+
+	allValues, err := store.GetAll()
+	require.NoError(t, err)
+	require.Equal(t, allValues["testKey"], []byte("testValue"))
+	require.Equal(t, allValues["testKey2"], []byte("testValue2"))
+	require.Len(t, allValues, 2)
+}
+
 func TestMemStore_Get(t *testing.T) {
 	store := MemStore{db: make(map[string][]byte)}
 

@@ -39,6 +39,9 @@ type Store interface {
 	// Put stores the key-value pair.
 	Put(k string, v []byte) error
 
+	// GetAll fetches all the key-value pairs within this store.
+	GetAll() (map[string][]byte, error)
+
 	// Get fetches the value associated with the given key.
 	Get(k string) ([]byte, error)
 

@@ -239,6 +239,10 @@ func (s *sqlDBStore) Put(k string, v []byte) error {
 	return nil
 }
 
+func (s *sqlDBStore) GetAll() (map[string][]byte, error) {
+	return nil, storage.ErrGetAllNotSupported
+}
+
 // Get fetches the value based on key
 func (s *sqlDBStore) Get(k string) ([]byte, error) {
 	if k == "" {

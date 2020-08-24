@@ -32,6 +32,7 @@ var logger = log.New(logModuleName)
 
 type marshalFunc func(interface{}) ([]byte, error)
 type readAllFunc func(io.Reader) ([]byte, error)
+type unquoteFunc func(string) (string, error)
 
 // Option configures the couchdb provider
 type Option func(opts *Provider)
@@ -133,7 +134,7 @@ func (p *Provider) OpenStore(name string) (storage.Store, error) {
 		return nil, fmt.Errorf(failureWhileConnectingToDBErrMsg, dbErr)
 	}
 
-	store := &CouchDBStore{db: db, marshal: json.Marshal, readAll: ioutil.ReadAll}
+	store := &CouchDBStore{db: db, marshal: json.Marshal, readAll: ioutil.ReadAll, unquote: strconv.Unquote}
 
 	p.dbs[name] = store
 
@@ -189,6 +190,7 @@ type CouchDBStore struct {
 	db      *kivik.DB
 	marshal marshalFunc
 	readAll readAllFunc
+	unquote unquoteFunc
 }
 
 // Put stores the given key-value pair in the store.
@@ -219,6 +221,22 @@ func (c *CouchDBStore) Put(k string, v []byte) error {
 	}
 
 	return nil
+}
+
+// GetAll fetches all the key-value pairs within this store.
+// TODO: #61 Add support for pagination
+func (c *CouchDBStore) GetAll() (map[string][]byte, error) {
+	rows, err := c.db.AllDocs(context.Background(), kivik.Options{"include_docs": true})
+	if err != nil {
+		return nil, fmt.Errorf(failureWhileGettingAllDocs, err)
+	}
+
+	allKeyValuePairs, err := c.getAllKeyValuePairs(rows)
+	if err != nil {
+		return nil, fmt.Errorf(failureWhileGettingAllKeyValuePairs, err)
+	}
+
+	return allKeyValuePairs, nil
 }
 
 // Get retrieves the value in the store associated with the given key.
@@ -344,6 +362,35 @@ func (i *couchDBResultsIterator) Value() ([]byte, error) {
 	}
 
 	return value, nil
+}
+
+func (c *CouchDBStore) getAllKeyValuePairs(rows *kivik.Rows) (map[string][]byte, error) {
+	allKeyValuePairs := make(map[string][]byte)
+
+	for rows.Next() {
+		key := rows.Key()
+		// The returned key is a raw JSON string. It needs to be unescaped:
+		key, err := c.unquote(key)
+		if err != nil {
+			return nil, fmt.Errorf(failureWhileUnquotingKey, err)
+		}
+
+		rawDoc := make(map[string]interface{})
+
+		err = rows.ScanDoc(&rawDoc)
+		if err != nil {
+			return nil, fmt.Errorf(failureWhileScanningResultRowsDoc, err)
+		}
+
+		documentBytes, err := c.getStoredValueFromRawDoc(rawDoc, key)
+		if err != nil {
+			return nil, fmt.Errorf(failureWhileGettingStoredValueFromRawDoc, err)
+		}
+
+		allKeyValuePairs[key] = documentBytes
+	}
+
+	return allKeyValuePairs, nil
 }
 
 func (c *CouchDBStore) getStoredValueFromRawDoc(rawDoc map[string]interface{}, k string) ([]byte, error) {

@@ -40,6 +40,7 @@ const (
 var testLogger = &TestLogger{} //nolint: gochecknoglobals
 var errFailingMarshal = errors.New("failingMarshal always fails")
 var errFailingReadAll = errors.New("failingReadAll always fails")
+var errFailingUnquote = errors.New("failingUnquote always fails")
 
 // For these unit tests to run, you must ensure you have a CouchDB instance running at the URL specified in couchDBURL.
 // 'make unit-test' from the terminal will take care of this for you.
@@ -267,6 +268,65 @@ func TestCouchDBStore_Put(t *testing.T) {
 		err = store.Put(testDocKey, []byte(testJSONValue1))
 		require.EqualError(t, err, "failure while adding rev ID: failure while unmarshalling put "+
 			"value with newly added rev ID: failingMarshal always fails")
+	})
+}
+
+func TestCouchDBStore_GetAll(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey, []byte(testJSONValue))
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey2, []byte(testJSONValue2))
+		require.NoError(t, err)
+
+		allValues, err := store.GetAll()
+		require.NoError(t, err)
+		require.Equal(t, allValues[testDocKey], []byte(testJSONValue))
+		require.Equal(t, allValues[testDocKey2], []byte(testJSONValue2))
+		require.Len(t, allValues, 2)
+	})
+	t.Run("Success, but no key-value pairs exist", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		allValues, err := store.GetAll()
+		require.NoError(t, err)
+		require.Empty(t, allValues)
+	})
+	t.Run("Failed to get all docs: database does not exist", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := provider.couchDBClient.DestroyDB(context.Background(), testStoreName)
+		require.NoError(t, err)
+
+		values, err := store.GetAll()
+		require.EqualError(t, err, "failure while getting all docs: Not Found: Database does not exist.")
+		require.Nil(t, values)
+	})
+	t.Run("Failure while unquoting key", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey, []byte(testJSONValue))
+		require.NoError(t, err)
+
+		couchDBStore, ok := store.(*CouchDBStore)
+		require.True(t, ok, "failed to assert store as a couchDBStore")
+
+		couchDBStore.unquote = failingUnquote
+
+		allValues, err := store.GetAll()
+		require.EqualError(t, err, "failure while getting all key-value pairs: "+
+			"failure while unquoting key: failingUnquote always fails")
+		require.Nil(t, allValues)
 	})
 }
 
@@ -682,4 +742,8 @@ func failingMarshal(_ interface{}) ([]byte, error) {
 
 func failingReadAll(_ io.Reader) ([]byte, error) {
 	return nil, errFailingReadAll
+}
+
+func failingUnquote(_ string) (string, error) {
+	return "", errFailingUnquote
 }

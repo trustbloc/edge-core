@@ -373,6 +373,13 @@ func TestSQLDBStore(t *testing.T) {
 		require.Nil(t, res)
 		require.EqualError(t, err, "failure while scanning rows: sql: Scan called without calling Next")
 	})
+	t.Run("Test GetAll", func(t *testing.T) {
+		store := &sqlDBStore{}
+
+		values, err := store.GetAll()
+		require.EqualError(t, err, storage.ErrGetAllNotSupported.Error())
+		require.Nil(t, values)
+	})
 }
 
 func TestMySqlDBStore_query(t *testing.T) {
