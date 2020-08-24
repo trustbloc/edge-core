@@ -100,6 +100,11 @@ func (m *MemStore) Put(k string, v []byte) error {
 	return nil
 }
 
+// GetAll fetches all the key-value pairs within this store.
+func (m *MemStore) GetAll() (map[string][]byte, error) {
+	return m.db, nil
+}
+
 // Get retrieves the value in the store associated with the given key.
 func (m *MemStore) Get(k string) ([]byte, error) {
 	m.mux.RLock()

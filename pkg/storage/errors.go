@@ -22,5 +22,8 @@ var ErrIndexingNotSupported = errors.New("indexing is not supported")
 // ErrQueryingNotSupported  is used when querying is not supported by the store implementation.
 var ErrQueryingNotSupported = errors.New("querying is not supported")
 
+// ErrGetAllNotSupported is used when the get all function is not supported by the store implementation.
+var ErrGetAllNotSupported = errors.New("getting all key-value pairs is not supported")
+
 // ErrKeyRequired is returned when an attempt is made to call a method with an empty key when it's not allowed.
 var ErrKeyRequired = errors.New("key is mandatory")
