@@ -58,8 +58,8 @@ func (t *TestLogger) Panicf(msg string, _ ...interface{}) {
 	t.logContents = msg
 }
 
-func (t *TestLogger) Debugf(msg string, _ ...interface{}) {
-	t.logContents = msg
+func (t *TestLogger) Debugf(msg string, args ...interface{}) {
+	t.logContents = fmt.Sprintf(msg, args...)
 }
 
 func (t *TestLogger) Infof(msg string, _ ...interface{}) {
@@ -277,7 +277,12 @@ func TestCouchDBStore_GetAll(t *testing.T) {
 
 		store := createAndOpenTestStore(t, provider)
 
-		err := store.Put(testDocKey, []byte(testJSONValue))
+		// Creating an index will create a design document.
+		// This test ensures that it gets filtered out of the results, as expected.
+		err := createIndex(store, `{"fields": ["SomeField"]}`)
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey, []byte(testJSONValue))
 		require.NoError(t, err)
 
 		err = store.Put(testDocKey2, []byte(testJSONValue2))
@@ -288,6 +293,9 @@ func TestCouchDBStore_GetAll(t *testing.T) {
 		require.Equal(t, allValues[testDocKey], []byte(testJSONValue))
 		require.Equal(t, allValues[testDocKey2], []byte(testJSONValue2))
 		require.Len(t, allValues, 2)
+
+		require.Equal(t, fmt.Sprintf(designDocumentFilteredOutLogMsg, "_design/TestDesignDoc"),
+			testLogger.logContents)
 	})
 	t.Run("Success, but no key-value pairs exist", func(t *testing.T) {
 		provider := initializeTest(t)

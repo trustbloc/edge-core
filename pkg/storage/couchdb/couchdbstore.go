@@ -26,6 +26,9 @@ import (
 
 const (
 	logModuleName = "edge-core-couchdbstore"
+
+	designDocumentFilteredOutLogMsg = "Getting all documents from a CouchDB store. " +
+		"A document with id %s was filtered out since it's a CouchDB design document."
 )
 
 var logger = log.New(logModuleName)
@@ -375,19 +378,23 @@ func (c *CouchDBStore) getAllKeyValuePairs(rows *kivik.Rows) (map[string][]byte,
 			return nil, fmt.Errorf(failureWhileUnquotingKey, err)
 		}
 
-		rawDoc := make(map[string]interface{})
+		if strings.HasPrefix(key, "_design") {
+			logger.Debugf(designDocumentFilteredOutLogMsg, key)
+		} else {
+			rawDoc := make(map[string]interface{})
 
-		err = rows.ScanDoc(&rawDoc)
-		if err != nil {
-			return nil, fmt.Errorf(failureWhileScanningResultRowsDoc, err)
+			err = rows.ScanDoc(&rawDoc)
+			if err != nil {
+				return nil, fmt.Errorf(failureWhileScanningResultRowsDoc, err)
+			}
+
+			documentBytes, err := c.getStoredValueFromRawDoc(rawDoc, key)
+			if err != nil {
+				return nil, fmt.Errorf(failureWhileGettingStoredValueFromRawDoc, err)
+			}
+
+			allKeyValuePairs[key] = documentBytes
 		}
-
-		documentBytes, err := c.getStoredValueFromRawDoc(rawDoc, key)
-		if err != nil {
-			return nil, fmt.Errorf(failureWhileGettingStoredValueFromRawDoc, err)
-		}
-
-		allKeyValuePairs[key] = documentBytes
 	}
 
 	return allKeyValuePairs, nil
