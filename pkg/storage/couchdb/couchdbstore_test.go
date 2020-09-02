@@ -38,7 +38,7 @@ const (
 	testDBPrefix               = "dbprefix"
 )
 
-var mockLoggerProvider = &mocklogger.Provider{} //nolint: gochecknoglobals
+var mockLoggerProvider = mocklogger.Provider{MockLogger: &mocklogger.MockLogger{}} //nolint: gochecknoglobals
 var errFailingMarshal = errors.New("failingMarshal always fails")
 var errFailingReadAll = errors.New("failingReadAll always fails")
 var errFailingUnquote = errors.New("failingUnquote always fails")
@@ -56,7 +56,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	log.Initialize(mockLoggerProvider)
+	log.Initialize(&mockLoggerProvider)
 
 	log.SetLevel(logModuleName, log.DEBUG)
 
@@ -260,7 +260,7 @@ func TestCouchDBStore_GetAll(t *testing.T) {
 		require.Equal(t, allValues[testDocKey2], []byte(testJSONValue2))
 		require.Len(t, allValues, 2)
 
-		require.Contains(t, mockLoggerProvider.TestLogger.AllLogContents,
+		require.Contains(t, mockLoggerProvider.MockLogger.AllLogContents,
 			fmt.Sprintf(designDocumentFilteredOutLogMsg, "_design/TestDesignDoc"))
 	})
 	t.Run("Success, but no key-value pairs exist", func(t *testing.T) {
