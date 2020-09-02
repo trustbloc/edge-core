@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/trustbloc/edge-core/pkg/log"
+	"github.com/trustbloc/edge-core/pkg/log/mocklogger"
 	"github.com/trustbloc/edge-core/pkg/storage"
 )
 
@@ -37,7 +38,7 @@ const (
 	testDBPrefix               = "dbprefix"
 )
 
-var testLogger = &TestLogger{} //nolint: gochecknoglobals
+var mockLoggerProvider = &mocklogger.Provider{} //nolint: gochecknoglobals
 var errFailingMarshal = errors.New("failingMarshal always fails")
 var errFailingReadAll = errors.New("failingReadAll always fails")
 var errFailingUnquote = errors.New("failingUnquote always fails")
@@ -45,41 +46,6 @@ var errFailingUnquote = errors.New("failingUnquote always fails")
 // For these unit tests to run, you must ensure you have a CouchDB instance running at the URL specified in couchDBURL.
 // 'make unit-test' from the terminal will take care of this for you.
 // To run the tests manually, start an instance by running docker run -p 5984:5984 couchdb:2.3.1 from a terminal.
-
-type TestLogger struct {
-	logContents string
-}
-
-func (t *TestLogger) Fatalf(msg string, _ ...interface{}) {
-	t.logContents = msg
-}
-
-func (t *TestLogger) Panicf(msg string, _ ...interface{}) {
-	t.logContents = msg
-}
-
-func (t *TestLogger) Debugf(msg string, args ...interface{}) {
-	t.logContents = fmt.Sprintf(msg, args...)
-}
-
-func (t *TestLogger) Infof(msg string, _ ...interface{}) {
-	t.logContents = msg
-}
-
-func (t *TestLogger) Warnf(msg string, _ ...interface{}) {
-	t.logContents = msg
-}
-
-func (t *TestLogger) Errorf(msg string, _ ...interface{}) {
-	t.logContents = msg
-}
-
-type testLoggerProvider struct {
-}
-
-func (t *testLoggerProvider) GetLogger(string) log.Logger {
-	return testLogger
-}
 
 func TestMain(m *testing.M) {
 	err := waitForCouchDBToStart()
@@ -90,7 +56,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	log.Initialize(&testLoggerProvider{})
+	log.Initialize(mockLoggerProvider)
 
 	log.SetLevel(logModuleName, log.DEBUG)
 
@@ -294,8 +260,8 @@ func TestCouchDBStore_GetAll(t *testing.T) {
 		require.Equal(t, allValues[testDocKey2], []byte(testJSONValue2))
 		require.Len(t, allValues, 2)
 
-		require.Equal(t, fmt.Sprintf(designDocumentFilteredOutLogMsg, "_design/TestDesignDoc"),
-			testLogger.logContents)
+		require.Contains(t, mockLoggerProvider.TestLogger.AllLogContents,
+			fmt.Sprintf(designDocumentFilteredOutLogMsg, "_design/TestDesignDoc"))
 	})
 	t.Run("Success, but no key-value pairs exist", func(t *testing.T) {
 		provider := initializeTest(t)
