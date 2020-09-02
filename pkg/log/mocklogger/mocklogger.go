@@ -65,12 +65,12 @@ func (t *MockLogger) Errorf(msg string, args ...interface{}) {
 	t.ErrorLogContents += fmt.Sprintln(fmt.Sprintf(msg, args...))
 }
 
-// Provider is a mock test provider that can be used for testing.
+// Provider is a mock logger provider that can be used for testing.
 type Provider struct {
-	TestLogger MockLogger
+	MockLogger *MockLogger
 }
 
-// GetLogger returns the underlying test logger.
+// GetLogger returns the underlying mock logger.
 func (p *Provider) GetLogger(string) log.Logger {
-	return &p.TestLogger
+	return p.MockLogger
 }
