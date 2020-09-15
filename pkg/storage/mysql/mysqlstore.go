@@ -19,7 +19,6 @@ import (
 
 const (
 	createDBQuery = "CREATE DATABASE IF NOT EXISTS "
-	useDBQuery    = "USE "
 )
 
 // Option configures the couchdb provider
@@ -52,6 +51,9 @@ type result struct {
 
 // NewProvider instantiates Provider.
 // Example DB Path root:my-secret-pw@tcp(127.0.0.1:3306)/.
+// This provider's CreateStore(name) implementation creates stores that are backed by a table under a schema
+// with the same name as the table. The fully qualified name of the table is thus `name.name`. The fully qualified
+// name of the table needs to be used with the store's `Query()` method.
 func NewProvider(dbPath string, opts ...Option) (p *Provider, err error) {
 	if dbPath == "" {
 		return nil, errBlankDBPath
@@ -125,15 +127,10 @@ func (p *Provider) CreateStore(name string) (err error) {
 		return fmt.Errorf(failureWhileCreatingDBErrMsg, name, err)
 	}
 
-	// Use Query is used to select the created database without this DDL operations are not permitted
-	_, err = db.Exec(useDBQuery + name)
-	if err != nil {
-		return fmt.Errorf(failureWhileExecutingUseQueryErrMsg, name, err)
-	}
-
 	// key has max varchar size it can accommodate as per mysql 8.0 spec
-	createTableStmt := "CREATE Table IF NOT EXISTS " + name +
-		"(`key` varchar(255) NOT NULL ,`value` BLOB, PRIMARY KEY (`key`));"
+	createTableStmt := fmt.Sprintf(
+		"Create TABLE IF NOT EXISTS %s.%s (`key` varchar(255) NOT NULL ,`value` BLOB, PRIMARY KEY (`key`))",
+		name, name)
 
 	// creating key-value table inside the database
 	_, err = db.Exec(createTableStmt)
@@ -145,7 +142,7 @@ func (p *Provider) CreateStore(name string) (err error) {
 }
 
 // OpenStore opens and returns a new DB with the given namespace
-func (p *Provider) OpenStore(name string) (storage.Store, error) {
+func (p *Provider) OpenStore(name string) (s storage.Store, openErr error) {
 	p.Lock()
 	defer p.Unlock()
 
@@ -165,14 +162,33 @@ func (p *Provider) OpenStore(name string) (storage.Store, error) {
 
 	// Use Query is used to select the created database.
 	// Without this, DDL operations are not permitted.
-	_, err = newDBConn.Exec(useDBQuery + name)
+	rows, err := newDBConn.Query(
+		"SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1", name, name)
 	if err != nil {
-		return nil, fmt.Errorf(failureWhileExecutingUseQueryErrMsg, name, err)
+		return nil, fmt.Errorf(failureWhileQueryingForTableErrMsg, name, err)
+	}
+
+	defer func() {
+		closeErr := rows.Close()
+		if closeErr != nil {
+			if openErr != nil {
+				openErr = fmt.Errorf("%w: failed to close rows: %s", openErr, closeErr)
+
+				return
+			}
+
+			openErr = fmt.Errorf("failed to close rows: %w", closeErr)
+		}
+	}()
+
+	if !rows.Next() {
+		return nil, fmt.Errorf(failureStoreDoesNotExistErrMsg, name)
 	}
 
 	store := &sqlDBStore{
 		db:        newDBConn,
-		tableName: name}
+		tableName: fmt.Sprintf("%s.%s", name, name),
+	}
 
 	p.dbs[name] = store
 
@@ -312,7 +328,7 @@ func (s *sqlDBStore) Delete(k string) error {
 
 	//nolint: gosec
 	// TODO address SQL injection warning #38
-	result, err := s.db.Exec("DELETE FROM `"+s.tableName+"` WHERE `key`= ?", k)
+	result, err := s.db.Exec("DELETE FROM "+s.tableName+" WHERE `key`= ?", k)
 	if err != nil {
 		return fmt.Errorf(failureWhileDeleteFromTableErrMsg, err)
 	}

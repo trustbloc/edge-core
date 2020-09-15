@@ -24,7 +24,6 @@ import (
 
 const (
 	sqlStoreDBURL = "root:my-secret-pw@tcp(127.0.0.1:3306)/"
-	testIndexName = "TestIndex"
 )
 
 var _ storage.Provider = (*Provider)(nil)
@@ -269,8 +268,7 @@ func TestSQLDBStore(t *testing.T) {
 
 		store, err := prov.OpenStore("sample")
 		require.Error(t, err)
-		require.EqualError(t, err,
-			`failure while executing USE query on DB sample: Error 1049: Unknown database 'sample'`)
+		require.EqualError(t, err, "store 'sample' does not exist")
 		require.Nil(t, store)
 	})
 	t.Run("Test the open new connection error", func(t *testing.T) {
@@ -291,9 +289,7 @@ func TestSQLDBStore(t *testing.T) {
 
 		_, err = prov.OpenStore("testErr")
 		require.Error(t, err)
-		require.EqualError(t, err,
-			"failure while executing USE query on DB testErr: dial tcp 127.0.0.1:3307: "+
-				"connect: connection refused")
+		require.Contains(t, err.Error(), "failed to query mysql for existence of table 'testErr'")
 	})
 	t.Run("Test sqlDB multi store close by name", func(t *testing.T) {
 		prov, err := NewProvider(sqlStoreDBURL, WithDBPrefix(randomPrefix()))
@@ -403,27 +399,27 @@ func TestMySqlDBStore_query(t *testing.T) {
 	}
 
 	t.Run("Test sql db store query", func(t *testing.T) {
-		itr, err := store.Query("SELECT * FROM testIterator WHERE `key` >=  'abc_' AND `key` < 'abc!!' " +
+		itr, err := store.Query("SELECT * FROM testIterator.testIterator WHERE `key` >=  'abc_' AND `key` < 'abc!!' " +
 			"order by `key`")
 		require.NoError(t, err)
 		verifyItr(t, itr, 4, "abc_")
 
-		itr, err = store.Query("SELECT * FROM testIterator WHERE `key` >=  '' AND `key` < '' " +
+		itr, err = store.Query("SELECT * FROM testIterator.testIterator WHERE `key` >=  '' AND `key` < '' " +
 			"order by `key`")
 		require.NoError(t, err)
 		verifyItr(t, itr, 0, "")
 
-		itr, err = store.Query("SELECT * FROM testIterator WHERE `key` >=  'abc' AND `key` < 'mno!!' " +
+		itr, err = store.Query("SELECT * FROM testIterator.testIterator WHERE `key` >=  'abc' AND `key` < 'mno!!' " +
 			"order by `key`")
 		require.NoError(t, err)
 		verifyItr(t, itr, 6, "")
 
-		itr, err = store.Query("SELECT * FROM testIterator WHERE `key` >=  'abc_' AND `key` < 'mno_123' " +
+		itr, err = store.Query("SELECT * FROM testIterator.testIterator WHERE `key` >=  'abc_' AND `key` < 'mno_123' " +
 			"order by `key`")
 		require.NoError(t, err)
 		verifyItr(t, itr, 5, "")
 
-		itr, err = store.Query("SELECT * FROM testIterator WHERE `key` = 'abc_124'")
+		itr, err = store.Query("SELECT * FROM testIterator.testIterator WHERE `key` = 'abc_124'")
 		require.NoError(t, err)
 		verifyItr(t, itr, 1, "")
 
@@ -436,11 +432,12 @@ func TestMySqlDBStore_query(t *testing.T) {
 				` use near '""' at line 1`)
 	})
 	t.Run("Successfully query using index", func(t *testing.T) {
-		err := createIndex(store, "`key`", storeName)
+		indexName := randomPrefix()
+		err := createIndex(store, "`key`", storeName, indexName)
 		require.NoError(t, err)
 		//nolint: gosec
-		itr, err := store.Query("SELECT * FROM " + storeName + "" +
-			" USE INDEX (" + testIndexName + ") WHERE `key` = 'abc_124'")
+		itr, err := store.Query("SELECT * FROM " + storeName + "." + storeName + "" +
+			" USE INDEX (" + indexName + ") WHERE `key` = 'abc_124'")
 		require.NoError(t, err)
 
 		ok, e := itr.Next()
@@ -460,12 +457,13 @@ func TestMySqlDBStore_query(t *testing.T) {
 	})
 	t.Run("Successfully query using index on two columns",
 		func(t *testing.T) {
-			err := createIndex(store, "`key`, value(255)", storeName)
+			indexName := randomPrefix()
+			err := createIndex(store, "`key`, value(255)", storeName, indexName)
 			require.NoError(t, err)
 
 			//nolint: gosec
-			itr, err := store.Query("SELECT * FROM " + storeName + "" +
-				" USE INDEX (" + testIndexName + ") WHERE `key` = 'abc_124'")
+			itr, err := store.Query("SELECT * FROM " + storeName + "." + storeName + "" +
+				" USE INDEX (" + indexName + ") WHERE `key` = 'abc_124'")
 			require.NoError(t, err)
 
 			ok, err := itr.Next()
@@ -499,7 +497,9 @@ func TestMySqlDBStore_CreateIndex(t *testing.T) {
 		sqlDBStore, ok := store.(*sqlDBStore)
 		require.True(t, ok)
 
-		err = createIndex(store, "`key`", storeName)
+		indexName := randomPrefix()
+
+		err = createIndex(store, "`key`", storeName, indexName)
 		require.NoError(t, err)
 
 		rows, errQuery := sqlDBStore.db.Query("SELECT DISTINCT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS" +
@@ -511,7 +511,7 @@ func TestMySqlDBStore_CreateIndex(t *testing.T) {
 			errScan := rows.Scan(&IndexName)
 			require.NoError(t, errScan)
 		}
-		require.Equal(t, testIndexName, IndexName)
+		require.Equal(t, indexName, IndexName)
 	})
 	t.Run("Fail to get index", func(t *testing.T) {
 		sqlDBStore, ok := store.(*sqlDBStore)
@@ -522,9 +522,11 @@ func TestMySqlDBStore_CreateIndex(t *testing.T) {
 
 		sqlDBStore.db = db
 
+		indexName := randomPrefix()
+
 		req := storage.CreateIndexRequest{
 			IndexStorageLocation: storeName,
-			IndexName:            testIndexName,
+			IndexName:            indexName,
 			WhatToIndex:          "`key`",
 		}
 		errOpen = sqlDBStore.CreateIndex(req)
@@ -572,7 +574,8 @@ func TestMySqlDBStore_CreateIndex(t *testing.T) {
 		store, err := prov.OpenStore("store1")
 		require.NoError(t, err)
 
-		err = createIndex(store, ``, "store1")
+		indexName := randomPrefix()
+		err = createIndex(store, ``, "store1", indexName)
 		require.Error(t, err)
 		require.EqualError(t, err, `failure while executing create index statement: Error 1064: `+
 			`You have an error in your SQL syntax; check the manual that corresponds to your MySQL server`+
@@ -649,9 +652,7 @@ func TestMySqlDBStore_Remove(t *testing.T) {
 		sqlStore.tableName = "someNonExistentTable"
 
 		err = store.Delete("SomeKey")
-		require.EqualError(t, err,
-			"failure while executing delete statement: Error 1146: Table "+
-				"'testStore.someNonExistentTable' doesn't exist")
+		require.EqualError(t, err, "failure while executing delete statement: Error 1046: No database selected")
 	})
 }
 
@@ -692,10 +693,10 @@ func verifyItr(t *testing.T, itr storage.ResultsIterator, count int, prefix stri
 	require.False(t, ok)
 }
 
-func createIndex(store storage.Store, whatToIndex, storageLocation string) error {
+func createIndex(store storage.Store, whatToIndex, table, indexName string) error {
 	createIndexRequest := storage.CreateIndexRequest{
-		IndexStorageLocation: storageLocation,
-		IndexName:            testIndexName,
+		IndexStorageLocation: table + "." + table,
+		IndexName:            indexName,
 		WhatToIndex:          whatToIndex,
 	}
 
