@@ -8,18 +8,15 @@ go 1.13
 
 require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
-	github.com/flimzy/diff v0.1.6 // indirect
-	github.com/flimzy/testy v0.1.16 // indirect
+	github.com/flimzy/diff v0.1.7 // indirect
+	github.com/flimzy/testy v0.1.17 // indirect
 	github.com/go-kivik/couchdb v2.0.0+incompatible
 	github.com/go-kivik/kivik v2.0.0+incompatible
 	github.com/go-kivik/kiviktest v2.0.0+incompatible // indirect
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/google/uuid v1.1.1
-	github.com/gopherjs/gopherjs v0.0.0-20200209183636-89e6cbcd0b6d // indirect
-	github.com/pkg/errors v0.9.1 // indirect
+	github.com/hashicorp/vault v1.2.1-0.20200911125421-dba37adcb55a
 	github.com/spf13/cobra v0.0.6
-	github.com/stretchr/testify v1.4.0
-	gitlab.com/flimzy/testy v0.0.2 // indirect
-	golang.org/x/net v0.0.0-20200202094626-16171245cfb2 // indirect
-	gopkg.in/yaml.v2 v2.2.8 // indirect
+	github.com/stretchr/testify v1.6.1
+	gitlab.com/flimzy/testy v0.2.1 // indirect
 )
