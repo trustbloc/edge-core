@@ -129,7 +129,7 @@ func (p *Provider) CreateStore(name string) (err error) {
 
 	// key has max varchar size it can accommodate as per mysql 8.0 spec
 	createTableStmt := fmt.Sprintf(
-		"Create TABLE IF NOT EXISTS %s.%s (`key` varchar(255) NOT NULL ,`value` BLOB, PRIMARY KEY (`key`))",
+		"Create TABLE IF NOT EXISTS `%s`.`%s` (`key` varchar(255) NOT NULL ,`value` BLOB, PRIMARY KEY (`key`))",
 		name, name)
 
 	// creating key-value table inside the database
@@ -187,7 +187,7 @@ func (p *Provider) OpenStore(name string) (s storage.Store, openErr error) {
 
 	store := &sqlDBStore{
 		db:        newDBConn,
-		tableName: fmt.Sprintf("%s.%s", name, name),
+		tableName: fmt.Sprintf("`%s`.`%s`", name, name),
 	}
 
 	p.dbs[name] = store
