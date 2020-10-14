@@ -513,6 +513,9 @@ func TestCouchDBStore_Query(t *testing.T) {
 
 			err = itr.Release()
 			require.NoError(t, err)
+
+			require.Contains(t, mockLoggerProvider.MockLogger.WarnLogContents,
+				"_design/TestDesignDoc, TestIndex was not used because it is not a valid index for this query.")
 		})
 	t.Run("Fail to query - invalid query JSON", func(t *testing.T) {
 		provider := initializeTest(t)
