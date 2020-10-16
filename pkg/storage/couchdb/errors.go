@@ -39,6 +39,7 @@ const (
 	// Error messages returned from Kivik CouchDB client that we directly check for
 	duplicateDBErrMsgFromKivik = "Precondition Failed: The database could not be created, the file already exists."
 	docNotFoundErrMsgFromKivik = "Not Found: missing"
+	docDeletedErrMsgFromKivik  = "Not Found: deleted"
 )
 
 var errBlankHost = errors.New("hostURL for new CouchDB provider can't be blank")
