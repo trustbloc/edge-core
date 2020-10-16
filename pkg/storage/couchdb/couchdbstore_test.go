@@ -218,6 +218,20 @@ func TestCouchDBStore_Put(t *testing.T) {
 		err := store.Put(testDocKey, []byte(testNonJSONValue))
 		require.NoError(t, err)
 	})
+	t.Run("Success: put after delete", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey, []byte(testJSONValue1))
+		require.NoError(t, err)
+
+		err = store.Delete(testDocKey)
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey, []byte(testJSONValue1))
+		require.NoError(t, err)
+	})
 	t.Run("Error while adding rev ID", func(t *testing.T) {
 		provider := initializeTest(t)
 

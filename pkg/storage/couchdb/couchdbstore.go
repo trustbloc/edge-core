@@ -207,7 +207,8 @@ func (c *CouchDBStore) Put(k string, v []byte) error {
 	}
 
 	revID, err := c.getRevID(k)
-	if err != nil && !errors.Is(err, storage.ErrValueNotFound) {
+	if err != nil && !errors.Is(err, storage.ErrValueNotFound) &&
+		!strings.Contains(err.Error(), docDeletedErrMsgFromKivik) {
 		return fmt.Errorf(getRevIDFailureErrMsg, err)
 	}
 
