@@ -24,6 +24,7 @@ import (
 
 const (
 	couchDBURL                 = "localhost:5984"
+	couchDBURLNotReady         = "localhost:5900"
 	testStoreName              = "teststore"
 	testDocKey                 = "sampleDBKey"
 	testDocKey2                = "sampleDBKey2"
@@ -42,6 +43,12 @@ var mockLoggerProvider = mocklogger.Provider{MockLogger: &mocklogger.MockLogger{
 var errFailingMarshal = errors.New("failingMarshal always fails")
 var errFailingReadAll = errors.New("failingReadAll always fails")
 var errFailingUnquote = errors.New("failingUnquote always fails")
+
+type mockPinger struct{}
+
+func (m mockPinger) Ping(ctx context.Context) (bool, error) {
+	return false, nil
+}
 
 // For these unit tests to run, you must ensure you have a CouchDB instance running at the URL specified in couchDBURL.
 // 'make unit-test' from the terminal will take care of this for you.
@@ -89,6 +96,16 @@ func TestNewProvider(t *testing.T) {
 		provider, err := NewProvider(couchDBURL)
 		require.NoError(t, err)
 		require.NotNil(t, provider)
+	})
+	t.Run("Fail to ping couchDB - error while pinging couchDB", func(t *testing.T) {
+		_, err := NewProvider(couchDBURLNotReady)
+		require.NotNil(t, err)
+		require.Contains(t, err.Error(), "failure while pinging couchDB")
+	})
+	t.Run("Fail to ping couchDB - couchDB not ready", func(t *testing.T) {
+		err := pingCouchDB(mockPinger{})
+		require.NotNil(t, err)
+		require.Equal(t, errors.New(dbNotReadyErrMsg), err)
 	})
 	t.Run("Blank URL provided", func(t *testing.T) {
 		provider, err := NewProvider("")

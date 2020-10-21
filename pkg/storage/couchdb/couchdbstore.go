@@ -19,6 +19,7 @@ import (
 
 	_ "github.com/go-kivik/couchdb" // The CouchDB driver
 	"github.com/go-kivik/kivik"
+	"github.com/go-kivik/kivik/driver"
 
 	"github.com/trustbloc/edge-core/pkg/log"
 	"github.com/trustbloc/edge-core/pkg/storage"
@@ -67,6 +68,11 @@ func NewProvider(hostURL string, opts ...Option) (*Provider, error) {
 		return nil, fmt.Errorf(failToInstantiateKivikClientErrMsg, err)
 	}
 
+	err = pingCouchDB(client)
+	if err != nil {
+		return nil, fmt.Errorf(failToPingCouchDB, err)
+	}
+
 	p := &Provider{hostURL: hostURL, couchDBClient: client, dbs: map[string]*CouchDBStore{}}
 
 	for _, opt := range opts {
@@ -74,6 +80,19 @@ func NewProvider(hostURL string, opts ...Option) (*Provider, error) {
 	}
 
 	return p, nil
+}
+
+func pingCouchDB(pinger driver.Pinger) error {
+	ready, err := pinger.Ping(context.Background())
+	if err != nil {
+		return err
+	}
+
+	if !ready {
+		return errors.New(dbNotReadyErrMsg)
+	}
+
+	return nil
 }
 
 // CreateStore creates a new store with the given name.
