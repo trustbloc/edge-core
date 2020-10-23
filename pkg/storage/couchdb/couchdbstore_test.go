@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cenkalti/backoff"
 	"github.com/go-kivik/kivik"
 	"github.com/stretchr/testify/require"
 
@@ -23,8 +24,9 @@ import (
 )
 
 const (
-	couchDBURL                 = "localhost:5984"
+	couchDBURL                 = "admin:password@localhost:5984"
 	couchDBURLNotReady         = "localhost:5900"
+	numRetries                 = 30
 	testStoreName              = "teststore"
 	testDocKey                 = "sampleDBKey"
 	testDocKey2                = "sampleDBKey2"
@@ -47,22 +49,27 @@ var (
 	errFailingUnquote  = errors.New("failingUnquote always fails")
 )
 
-type mockPinger struct{}
+type mockKivikClient struct{}
 
-func (m mockPinger) Ping(ctx context.Context) (bool, error) {
+func (m mockKivikClient) DBExists(ctx context.Context, dbName string, options ...kivik.Options) (bool, error) {
 	return false, nil
 }
 
 // For these unit tests to run, you must ensure you have a CouchDB instance running at the URL specified in couchDBURL.
 // 'make unit-test' from the terminal will take care of this for you.
-// To run the tests manually, start an instance by running docker run -p 5984:5984 couchdb:2.3.1 from a terminal.
+// To run the tests manually, start an instance by running
+// 'docker run -p 5984:5984 --name CouchDBStoreTest
+// -v "$pwd"/scripts/couchdb-config/config.ini:/opt/couchdb/etc/local.d/config.ini
+// -e COUCHDB_USER=admin -e COUCHDB_PASSWORD=password couchdb:3.1.0' from a terminal.
 
 func TestMain(m *testing.M) {
 	err := waitForCouchDBToStart()
 	if err != nil {
 		logger.Errorf(err.Error() +
 			". Make sure you start a couchDB instance using" +
-			" 'docker run -p 5984:5984 couchdb:2.3.1' before running the unit tests")
+			" 'docker run -p 5984:5984 --name CouchDBStoreTest " +
+			" -v {path to edge-core}/scripts/couchdb-config/config.ini:/opt/couchdb/etc/local.d/config.ini " +
+			" -e COUCHDB_USER=admin -e COUCHDB_PASSWORD=password couchdb:3.1.0' before running the unit tests")
 		os.Exit(1)
 	}
 
@@ -79,19 +86,22 @@ func waitForCouchDBToStart() error {
 		return err
 	}
 
-	timeout := time.After(5 * time.Second)
-
-	for {
-		select {
-		case <-timeout:
-			return fmt.Errorf("timeout: couldn't reach CouchDB server")
-		default:
-			_, err = client.AllDBs(context.Background())
-			if err == nil {
-				return nil
-			}
-		}
+	if err := checkCouchDBReady(client); err != nil {
+		return err
 	}
+
+	return nil
+}
+
+func checkCouchDBReady(client *kivik.Client) error {
+	return backoff.Retry(func() error {
+		err := pingCouchDB(client)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}, backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Second), numRetries))
 }
 
 func TestNewProvider(t *testing.T) {
@@ -100,22 +110,21 @@ func TestNewProvider(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, provider)
 	})
-	t.Run("Fail to ping couchDB - error while pinging couchDB", func(t *testing.T) {
+	t.Run("Fail to ping couchDB - error while checking if '_users' db exists", func(t *testing.T) {
 		_, err := NewProvider(couchDBURLNotReady)
 		require.NotNil(t, err)
-		require.Contains(t, err.Error(), "failure while pinging couchDB")
+		require.Contains(t, err.Error(), "failure while probing couchDB for '_users' DB")
 	})
-	t.Run("Fail to ping couchDB - couchDB not ready", func(t *testing.T) {
-		err := pingCouchDB(mockPinger{})
+	t.Run("Fail to ping couchDB - '_users' db is not ready", func(t *testing.T) {
+		err := pingCouchDB(&mockKivikClient{})
 		require.NotNil(t, err)
-		require.Equal(t, errors.New(dbNotReadyErrMsg), err)
+		require.Equal(t, errors.New(couchDBNotReadyErrMsg), err)
 	})
 	t.Run("Blank URL provided", func(t *testing.T) {
 		provider, err := NewProvider("")
 		require.EqualError(t, err, errBlankHost.Error())
 		require.Nil(t, provider)
 	})
-
 	t.Run("Unreachable URL provided", func(t *testing.T) {
 		provider, err := NewProvider("%")
 		require.Error(t, err)
