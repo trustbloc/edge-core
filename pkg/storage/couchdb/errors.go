@@ -9,7 +9,9 @@ import "errors"
 
 const (
 	// Error messages we return.
-	dbNotReadyErrMsg                                   = "DB does not yet exist - CouchDB might not be fully initialized"
+	couchDBNotReadyErrMsg = "couchDB '_users' DB does not yet exist - CouchDB might " +
+		"not be fully initialized"
+	failToProbeUsersDB                                 = "failure while probing couchDB for '_users' DB: %w"
 	failToPingCouchDB                                  = "failure while pinging couchDB: %w"
 	failToInstantiateKivikClientErrMsg                 = "failure while instantiate Kivik CouchDB client: %w"
 	dbExistsCheckFailure                               = "failure while checking if the database exists: %w"

@@ -20,13 +20,14 @@ import (
 	// The CouchDB driver.
 	_ "github.com/go-kivik/couchdb"
 	"github.com/go-kivik/kivik"
-	"github.com/go-kivik/kivik/driver"
 
 	"github.com/trustbloc/edge-core/pkg/log"
 	"github.com/trustbloc/edge-core/pkg/storage"
 )
 
 const (
+	couchDBUsersTable = "_users"
+
 	logModuleName = "edge-core-couchdbstore"
 
 	designDocumentFilteredOutLogMsg = "Getting all documents from a CouchDB store. " +
@@ -49,6 +50,10 @@ func WithDBPrefix(dbPrefix string) Option {
 	return func(opts *Provider) {
 		opts.dbPrefix = dbPrefix
 	}
+}
+
+type kivikClient interface {
+	DBExists(ctx context.Context, dbName string, options ...kivik.Options) (bool, error)
 }
 
 // Provider represents an CouchDB implementation of the storage.Provider interface.
@@ -85,14 +90,14 @@ func NewProvider(hostURL string, opts ...Option) (*Provider, error) {
 	return p, nil
 }
 
-func pingCouchDB(pinger driver.Pinger) error {
-	ready, err := pinger.Ping(context.Background())
+func pingCouchDB(client kivikClient) error {
+	exists, err := client.DBExists(context.Background(), couchDBUsersTable)
 	if err != nil {
-		return err
+		return fmt.Errorf(failToProbeUsersDB, err)
 	}
 
-	if !ready {
-		return errors.New(dbNotReadyErrMsg)
+	if !exists {
+		return errors.New(couchDBNotReadyErrMsg)
 	}
 
 	return nil
