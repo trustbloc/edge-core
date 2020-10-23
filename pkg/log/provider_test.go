@@ -4,7 +4,7 @@ Copyright SecureKey Technologies Inc. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package log
+package log // nolint:testpackage // references internal implementation details
 
 import (
 	"sync"
@@ -15,7 +15,7 @@ import (
 	"github.com/trustbloc/edge-core/pkg/internal/logging/modlog"
 )
 
-// TestDefaultLogger tests custom logging feature when custom logging provider is supplied through 'Initialize()' call
+// TestDefaultLogger tests custom logging feature when custom logging provider is supplied through 'Initialize()' call.
 func TestCustomLogger(t *testing.T) {
 	defer func() { loggerProviderOnce = sync.Once{} }()
 
@@ -27,17 +27,17 @@ func TestCustomLogger(t *testing.T) {
 	require.NotPanics(t, func() { New(module).Infof("Test") })
 }
 
-// newCustomProvider return new sample logging provider to demonstrate custom logging provider
+// newCustomProvider return new sample logging provider to demonstrate custom logging provider.
 func newCustomProvider(module string) *sampleProvider {
 	return &sampleProvider{modlog.GetSampleCustomLogger(module)}
 }
 
-// sampleProvider is a custom logging provider
+// sampleProvider is a custom logging provider.
 type sampleProvider struct {
 	logger Logger
 }
 
-// GetLogger returns custom logger implementation
+// GetLogger returns custom logger implementation.
 func (p *sampleProvider) GetLogger(module string) Logger {
 	return p.logger
 }

@@ -10,11 +10,12 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
+	"path"
 
 	commontls "github.com/trustbloc/edge-core/pkg/tls"
 )
 
-// GetCertPool get cert pool
+// GetCertPool get cert pool.
 func GetCertPool(useSystemCertPool bool, tlsCACerts []string) (*x509.CertPool, error) {
 	certPool, err := commontls.NewCertPool(useSystemCertPool)
 	if err != nil {
@@ -22,7 +23,7 @@ func GetCertPool(useSystemCertPool bool, tlsCACerts []string) (*x509.CertPool, e
 	}
 
 	for _, v := range tlsCACerts {
-		bytes, errRead := ioutil.ReadFile(v) //nolint: gosec
+		bytes, errRead := ioutil.ReadFile(path.Clean(v))
 		if errRead != nil {
 			return nil, fmt.Errorf("failed to read cert: %w", errRead)
 		}

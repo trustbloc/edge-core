@@ -21,17 +21,17 @@ const (
 	createDBQuery = "CREATE DATABASE IF NOT EXISTS "
 )
 
-// Option configures the couchdb provider
+// Option configures the couchdb provider.
 type Option func(opts *Provider)
 
-// WithDBPrefix option is for adding prefix to db name
+// WithDBPrefix option is for adding prefix to db name.
 func WithDBPrefix(dbPrefix string) Option {
 	return func(opts *Provider) {
 		opts.dbPrefix = dbPrefix
 	}
 }
 
-// Provider represents a MySQL DB implementation of the storage.Provider interface
+// Provider represents a MySQL DB implementation of the storage.Provider interface.
 type Provider struct {
 	dbURL    string
 	dbs      map[string]*sqlDBStore
@@ -84,7 +84,8 @@ func NewProvider(dbPath string, opts ...Option) (p *Provider, err error) {
 
 	p = &Provider{
 		dbURL: dbPath,
-		dbs:   map[string]*sqlDBStore{}}
+		dbs:   map[string]*sqlDBStore{},
+	}
 
 	for _, opt := range opts {
 		opt(p)
@@ -141,7 +142,7 @@ func (p *Provider) CreateStore(name string) (err error) {
 	return nil
 }
 
-// OpenStore opens and returns a new DB with the given namespace
+// OpenStore opens and returns a new DB with the given namespace.
 func (p *Provider) OpenStore(name string) (s storage.Store, openErr error) {
 	p.Lock()
 	defer p.Unlock()
@@ -162,6 +163,7 @@ func (p *Provider) OpenStore(name string) (s storage.Store, openErr error) {
 
 	// Use Query is used to select the created database.
 	// Without this, DDL operations are not permitted.
+	// nolint:rowserrcheck // will be fixed in https://github.com/trustbloc/edge-core/issues/86
 	rows, err := newDBConn.Query(
 		"SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1", name, name)
 	if err != nil {
@@ -212,7 +214,7 @@ func (p *Provider) Close() error {
 	return nil
 }
 
-// CloseStore closes a previously opened store
+// CloseStore closes a previously opened store.
 func (p *Provider) CloseStore(name string) error {
 	p.Lock()
 	defer p.Unlock()
@@ -236,15 +238,15 @@ func (p *Provider) CloseStore(name string) error {
 	return nil
 }
 
-// Put stores the key and the value
+// Put stores the key and the value.
 func (s *sqlDBStore) Put(k string, v []byte) error {
 	if k == "" {
 		return storage.ErrKeyRequired
 	}
 
-	//nolint: gosec
 	// create upsert query to insert the record, checking whether the key is already mapped to a value in the store.
 	// todo issue-38 to address sql injection warning
+	// nolint:gosec // issue-38 to address sql injection warning
 	createStmt := "INSERT INTO " + s.tableName + " VALUES (?, ?) ON DUPLICATE KEY UPDATE value=?"
 	// executing the prepared insert statement
 	_, err := s.db.Exec(createStmt, k, v, v)
@@ -255,20 +257,21 @@ func (s *sqlDBStore) Put(k string, v []byte) error {
 	return nil
 }
 
+// GetAll is not implemented.
 func (s *sqlDBStore) GetAll() (map[string][]byte, error) {
 	return nil, storage.ErrGetAllNotSupported
 }
 
-// Get fetches the value based on key
+// Get fetches the value based on key.
 func (s *sqlDBStore) Get(k string) ([]byte, error) {
 	if k == "" {
 		return nil, storage.ErrKeyRequired
 	}
 
 	var value []byte
-	//nolint: gosec
 	// select query to fetch the value by key
 	// todo issue-38 to address sql injection warning
+	// nolint:gosec // issue-38 to address sql injection warning
 	err := s.db.QueryRow("SELECT `value` FROM "+s.tableName+" "+
 		" WHERE `key` = ?", k).Scan(&value)
 	if err != nil {
@@ -313,6 +316,7 @@ func (s *sqlDBStore) CreateIndex(createIndexRequest storage.CreateIndexRequest) 
 }
 
 func (s *sqlDBStore) Query(findQuery string) (storage.ResultsIterator, error) {
+	// nolint:rowserrcheck,sqlclosecheck // will be fixed in https://github.com/trustbloc/edge-core/issues/86
 	resultRows, err := s.db.Query(findQuery)
 	if err != nil {
 		return nil, fmt.Errorf(failureWhileQueryDBErrMsg, err)
@@ -326,8 +330,8 @@ func (s *sqlDBStore) Delete(k string) error {
 		return storage.ErrKeyRequired
 	}
 
-	//nolint: gosec
 	// TODO address SQL injection warning #38
+	// nolint:gosec // issue-38 to address sql injection warning
 	result, err := s.db.Exec("DELETE FROM "+s.tableName+" WHERE `key`= ?", k)
 	if err != nil {
 		return fmt.Errorf(failureWhileDeleteFromTableErrMsg, err)
@@ -378,11 +382,13 @@ func (i *sqlDBResultsIterator) Release() error {
 func (s *sqlDBStore) getIndexes() ([]string, error) {
 	getIndexStmt := "SELECT DISTINCT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_NAME= ?"
 
+	// nolint:sqlclosecheck // will be fixed in https://github.com/trustbloc/edge-core/issues/86
 	indexStmt, err := s.db.Prepare(getIndexStmt)
 	if err != nil {
 		return nil, fmt.Errorf(failureWhilePreparingIndexStatementErrMsg, err)
 	}
 
+	// nolint:rowserrcheck,sqlclosecheck // will be fixed in https://github.com/trustbloc/edge-core/issues/86
 	rows, err := indexStmt.Query(s.tableName)
 	if err != nil {
 		return nil, fmt.Errorf(failureWhileExecutingSelectIndexStatementErrMsg, err)

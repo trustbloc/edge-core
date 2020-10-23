@@ -4,7 +4,7 @@ Copyright SecureKey Technologies Inc. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package operation
+package operation // nolint:testpackage // references internal implementation details
 
 import (
 	"bytes"
@@ -47,6 +47,7 @@ func TestLogSpecPut(t *testing.T) {
 	t.Run("Successfully set logging levels", func(t *testing.T) {
 		resetLoggingLevels()
 
+		// nolint:noctx // context not required for tests
 		req, err := http.NewRequest(http.MethodPut, "", bytes.NewBuffer([]byte(testLogSpec)))
 		require.NoError(t, err)
 
@@ -63,6 +64,7 @@ func TestLogSpecPut(t *testing.T) {
 	t.Run("Empty request body", func(t *testing.T) {
 		resetLoggingLevels()
 
+		// nolint:noctx // context not required for tests
 		req, err := http.NewRequest(http.MethodPut, "", bytes.NewBuffer(nil))
 		require.NoError(t, err)
 
@@ -135,6 +137,7 @@ func TestLogSpecPut(t *testing.T) {
 	t.Run("Invalid log spec: multiple default log levels", func(t *testing.T) {
 		resetLoggingLevels()
 
+		// nolint:noctx // context not required for tests
 		req, err := http.NewRequest(http.MethodPut, "", bytes.NewBuffer([]byte(`{"spec":"debug:debug"}`)))
 		require.NoError(t, err)
 

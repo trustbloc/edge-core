@@ -17,7 +17,8 @@ import (
 	"strings"
 	"sync"
 
-	_ "github.com/go-kivik/couchdb" // The CouchDB driver
+	// The CouchDB driver.
+	_ "github.com/go-kivik/couchdb"
 	"github.com/go-kivik/kivik"
 	"github.com/go-kivik/kivik/driver"
 
@@ -34,21 +35,23 @@ const (
 
 var logger = log.New(logModuleName)
 
-type marshalFunc func(interface{}) ([]byte, error)
-type readAllFunc func(io.Reader) ([]byte, error)
-type unquoteFunc func(string) (string, error)
+type (
+	marshalFunc func(interface{}) ([]byte, error)
+	readAllFunc func(io.Reader) ([]byte, error)
+	unquoteFunc func(string) (string, error)
+)
 
-// Option configures the couchdb provider
+// Option configures the couchdb provider.
 type Option func(opts *Provider)
 
-// WithDBPrefix option is for adding prefix to db name
+// WithDBPrefix option is for adding prefix to db name.
 func WithDBPrefix(dbPrefix string) Option {
 	return func(opts *Provider) {
 		opts.dbPrefix = dbPrefix
 	}
 }
 
-// Provider represents an CouchDB implementation of the storage.Provider interface
+// Provider represents an CouchDB implementation of the storage.Provider interface.
 type Provider struct {
 	hostURL       string
 	couchDBClient *kivik.Client
@@ -57,7 +60,7 @@ type Provider struct {
 	mux           sync.RWMutex
 }
 
-// NewProvider instantiates Provider
+// NewProvider instantiates Provider.
 func NewProvider(hostURL string, opts ...Option) (*Provider, error) {
 	if hostURL == "" {
 		return nil, errBlankHost
@@ -124,7 +127,7 @@ func (p *Provider) CreateStore(name string) error {
 // If the store has been previously opened, it will be returned it from the local cache.
 // Note that if the underlying database was deleted by an external force, (i.e. not by using the CloseStore() method)
 // then this local cache will be invalid. To make it valid again, either a new Provider object needs to be created,
-// or Provider.CreateStore() needs to be called again with the same store name. TODO address this: #51
+// or Provider.CreateStore() needs to be called again with the same store name. TODO address this: #51.
 func (p *Provider) OpenStore(name string) (storage.Store, error) {
 	p.mux.Lock()
 	defer p.mux.Unlock()
@@ -247,7 +250,7 @@ func (c *CouchDBStore) Put(k string, v []byte) error {
 }
 
 // GetAll fetches all the key-value pairs within this store.
-// TODO: #61 Add support for pagination
+// TODO: #61 Add support for pagination.
 func (c *CouchDBStore) GetAll() (map[string][]byte, error) {
 	rows, err := c.db.AllDocs(context.Background(), kivik.Options{"include_docs": true})
 	if err != nil {
@@ -511,6 +514,7 @@ func (c *CouchDBStore) addRevID(valueToPut []byte, revID string) ([]byte, error)
 
 func isJSON(textToCheck []byte) bool {
 	var js map[string]interface{}
+
 	return json.Unmarshal(textToCheck, &js) == nil
 }
 
@@ -518,5 +522,6 @@ func isJSON(textToCheck []byte) bool {
 // We want to do it all in one step, hence this manual stuff below.
 func wrapTextAsCouchDBAttachment(textToWrap []byte) []byte {
 	encodedTextToWrap := base64.StdEncoding.EncodeToString(textToWrap)
+
 	return []byte(`{"_attachments": {"data": {"data": "` + encodedTextToWrap + `", "content_type": "text/plain"}}}`)
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// GetUserSetVarFromString returns values either command line flag or environment variable
+// GetUserSetVarFromString returns values either command line flag or environment variable.
 func GetUserSetVarFromString(cmd *cobra.Command, flagName, envKey string, isOptional bool) (string, error) {
 	if cmd.Flags().Changed(flagName) {
 		value, err := cmd.Flags().GetString(flagName)
@@ -43,7 +43,7 @@ func GetUserSetVarFromString(cmd *cobra.Command, flagName, envKey string, isOpti
 		" (environment variable) have been set.")
 }
 
-// GetUserSetVarFromArrayString returns values either command line flag or environment variable
+// GetUserSetVarFromArrayString returns values either command line flag or environment variable.
 func GetUserSetVarFromArrayString(cmd *cobra.Command, flagName, envKey string, isOptional bool) ([]string, error) {
 	if cmd.Flags().Changed(flagName) {
 		value, err := cmd.Flags().GetStringArray(flagName)

@@ -30,7 +30,7 @@ Error: %s`
 	getLogSpecPrepareErrMsg = "Failure while preparing log level response: %s."
 )
 
-// Handler represents an HTTP handler for each controller API endpoint
+// Handler represents an HTTP handler for each controller API endpoint.
 type Handler interface {
 	Path() string
 	Method() string
@@ -57,7 +57,7 @@ type logSpec struct {
 	Spec string `json:"spec"`
 }
 
-// GetRESTHandlers gets all controller API handlers available for this service
+// GetRESTHandlers gets all controller API handlers available for this service.
 func GetRESTHandlers() []Handler {
 	return []Handler{
 		support.NewHTTPHandler(logSpecEndpoint, http.MethodPut, logSpecPutHandler),
@@ -65,7 +65,7 @@ func GetRESTHandlers() []Handler {
 	}
 }
 
-// Change Log Specification swagger:route PUT /logspec changeLogSpecReq
+// Change Log Specification swagger:route PUT /logspec changeLogSpecReq.
 //
 // Changes the current log specification.
 // Format: ModuleName1=Level1:ModuleName2=Level2:ModuleNameN=LevelN:AllOtherModuleDefaultLevel
@@ -98,6 +98,7 @@ func changeLogSpec(rw http.ResponseWriter, req *http.Request) {
 	err := json.NewDecoder(req.Body).Decode(&incomingLogSpec)
 	if err != nil {
 		commhttp.WriteErrorResponse(rw, http.StatusBadRequest, fmt.Sprintf(invalidLogSpec, err))
+
 		return
 	}
 
@@ -114,6 +115,7 @@ func changeLogSpec(rw http.ResponseWriter, req *http.Request) {
 			logLevel, errParse := log.ParseLevel(moduleAndLevelPair[1])
 			if errParse != nil {
 				commhttp.WriteErrorResponse(rw, http.StatusBadRequest, fmt.Sprintf(invalidLogSpec, errParse))
+
 				return
 			}
 
@@ -124,6 +126,7 @@ func changeLogSpec(rw http.ResponseWriter, req *http.Request) {
 				// The given log spec is formatted incorrectly; it contains multiple default values.
 				commhttp.WriteErrorResponse(rw, http.StatusBadRequest,
 					fmt.Sprintf(invalidLogSpec, multipleDefaultValues))
+
 				return
 			}
 			var errParse error
@@ -131,6 +134,7 @@ func changeLogSpec(rw http.ResponseWriter, req *http.Request) {
 			defaultLogLevel, errParse = log.ParseLevel(logLevelByModulePart)
 			if errParse != nil {
 				commhttp.WriteErrorResponse(rw, http.StatusBadRequest, fmt.Sprintf(invalidLogSpec, errParse))
+
 				return
 			}
 		}
@@ -157,6 +161,7 @@ func getLogSpec(rw http.ResponseWriter, response StringBuilder) {
 			_, err := response.Write([]byte(module + "=" + log.ParseString(level) + ":"))
 			if err != nil {
 				commhttp.WriteErrorResponse(rw, http.StatusInternalServerError, fmt.Sprintf(getLogSpecPrepareErrMsg, err))
+
 				return
 			}
 		}
@@ -165,6 +170,7 @@ func getLogSpec(rw http.ResponseWriter, response StringBuilder) {
 	_, err := response.Write([]byte(defaultDebugLevel))
 	if err != nil {
 		commhttp.WriteErrorResponse(rw, http.StatusInternalServerError, fmt.Sprintf(getLogSpecPrepareErrMsg, err))
+
 		return
 	}
 

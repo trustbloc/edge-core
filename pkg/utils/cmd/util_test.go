@@ -3,7 +3,7 @@ Copyright SecureKey Technologies Inc. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package cmd
+package cmd_test
 
 import (
 	"os"
@@ -11,6 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
+
+	"github.com/trustbloc/edge-core/pkg/utils/cmd"
 )
 
 const (
@@ -21,7 +23,7 @@ const (
 func TestGetUserSetVarFromStringNegative(t *testing.T) {
 	os.Clearenv()
 
-	cmd := &cobra.Command{
+	command := &cobra.Command{
 		Use:   "start",
 		Short: "short usage",
 		Long:  "long usage",
@@ -31,7 +33,7 @@ func TestGetUserSetVarFromStringNegative(t *testing.T) {
 	}
 
 	// test missing both command line argument and environment vars
-	env, err := GetUserSetVarFromString(cmd, flagName, envKey, false)
+	env, err := cmd.GetUserSetVarFromString(command, flagName, envKey, false)
 	require.Error(t, err)
 	require.Empty(t, env)
 	require.Contains(t, err.Error(), "TEST_HOST_URL (environment variable) have been set.")
@@ -40,19 +42,19 @@ func TestGetUserSetVarFromStringNegative(t *testing.T) {
 	err = os.Setenv(envKey, "")
 	require.NoError(t, err)
 
-	env, err = GetUserSetVarFromString(cmd, flagName, envKey, false)
+	env, err = cmd.GetUserSetVarFromString(command, flagName, envKey, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "TEST_HOST_URL value is empty")
 	require.Empty(t, env)
 
 	// test arg is empty
-	cmd.Flags().StringP(flagName, "", "initial", "")
+	command.Flags().StringP(flagName, "", "initial", "")
 	args := []string{"--" + flagName, ""}
-	cmd.SetArgs(args)
-	err = cmd.Execute()
+	command.SetArgs(args)
+	err = command.Execute()
 	require.NoError(t, err)
 
-	env, err = GetUserSetVarFromString(cmd, flagName, envKey, false)
+	env, err = cmd.GetUserSetVarFromString(command, flagName, envKey, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "host-url value is empty")
 	require.Empty(t, env)
@@ -61,7 +63,7 @@ func TestGetUserSetVarFromStringNegative(t *testing.T) {
 func TestGetUserSetVarFromArrayStringNegative(t *testing.T) {
 	os.Clearenv()
 
-	cmd := &cobra.Command{
+	command := &cobra.Command{
 		Use:   "start",
 		Short: "short usage",
 		Long:  "long usage",
@@ -71,7 +73,7 @@ func TestGetUserSetVarFromArrayStringNegative(t *testing.T) {
 	}
 
 	// test missing both command line argument and environment vars
-	env, err := GetUserSetVarFromArrayString(cmd, flagName, envKey, false)
+	env, err := cmd.GetUserSetVarFromArrayString(command, flagName, envKey, false)
 	require.Error(t, err)
 	require.Empty(t, env)
 	require.Contains(t, err.Error(), "TEST_HOST_URL (environment variable) have been set.")
@@ -80,19 +82,19 @@ func TestGetUserSetVarFromArrayStringNegative(t *testing.T) {
 	err = os.Setenv(envKey, "")
 	require.NoError(t, err)
 
-	env, err = GetUserSetVarFromArrayString(cmd, flagName, envKey, false)
+	env, err = cmd.GetUserSetVarFromArrayString(command, flagName, envKey, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "TEST_HOST_URL value is empty")
 	require.Empty(t, env)
 
 	// test arg is empty
-	cmd.Flags().StringArrayP(flagName, "", []string{}, "")
+	command.Flags().StringArrayP(flagName, "", []string{}, "")
 	args := []string{"--" + flagName, ""}
-	cmd.SetArgs(args)
-	err = cmd.Execute()
+	command.SetArgs(args)
+	err = command.Execute()
 	require.NoError(t, err)
 
-	env, err = GetUserSetVarFromArrayString(cmd, flagName, envKey, false)
+	env, err = cmd.GetUserSetVarFromArrayString(command, flagName, envKey, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "host-url value is empty")
 	require.Empty(t, env)
@@ -101,7 +103,7 @@ func TestGetUserSetVarFromArrayStringNegative(t *testing.T) {
 func TestGetUserSetVarFromString(t *testing.T) {
 	os.Clearenv()
 
-	cmd := &cobra.Command{
+	command := &cobra.Command{
 		Use:   "start",
 		Short: "short usage",
 		Long:  "long usage",
@@ -116,19 +118,19 @@ func TestGetUserSetVarFromString(t *testing.T) {
 	require.NoError(t, err)
 
 	// test resolution via environment variable
-	env, err := GetUserSetVarFromString(cmd, flagName, envKey, false)
+	env, err := cmd.GetUserSetVarFromString(command, flagName, envKey, false)
 	require.NoError(t, err)
 	require.Equal(t, hostURL, env)
 
 	// set command line arguments
-	cmd.Flags().StringP(flagName, "", "initial", "")
+	command.Flags().StringP(flagName, "", "initial", "")
 	args := []string{"--" + flagName, "other"}
-	cmd.SetArgs(args)
-	err = cmd.Execute()
+	command.SetArgs(args)
+	err = command.Execute()
 	require.NoError(t, err)
 
 	// test resolution via command line argument - no environment variable set
-	env, err = GetUserSetVarFromString(cmd, flagName, "", false)
+	env, err = cmd.GetUserSetVarFromString(command, flagName, "", false)
 	require.NoError(t, err)
 	require.Equal(t, "other", env)
 }
@@ -136,7 +138,7 @@ func TestGetUserSetVarFromString(t *testing.T) {
 func TestGetUserSetVarFromArrayString(t *testing.T) {
 	os.Clearenv()
 
-	cmd := &cobra.Command{
+	command := &cobra.Command{
 		Use:   "start",
 		Short: "short usage",
 		Long:  "long usage",
@@ -151,19 +153,19 @@ func TestGetUserSetVarFromArrayString(t *testing.T) {
 	require.NoError(t, err)
 
 	// test resolution via environment variable
-	env, err := GetUserSetVarFromArrayString(cmd, flagName, envKey, false)
+	env, err := cmd.GetUserSetVarFromArrayString(command, flagName, envKey, false)
 	require.NoError(t, err)
 	require.Equal(t, []string{hostURL}, env)
 
 	// set command line arguments
-	cmd.Flags().StringArrayP(flagName, "", []string{}, "")
+	command.Flags().StringArrayP(flagName, "", []string{}, "")
 	args := []string{"--" + flagName, "other", "--" + flagName, "other1"}
-	cmd.SetArgs(args)
-	err = cmd.Execute()
+	command.SetArgs(args)
+	err = command.Execute()
 	require.NoError(t, err)
 
 	// test resolution via command line argument - no environment variable set
-	env, err = GetUserSetVarFromArrayString(cmd, flagName, "", false)
+	env, err = cmd.GetUserSetVarFromArrayString(command, flagName, "", false)
 	require.NoError(t, err)
 	require.Equal(t, []string{"other", "other1"}, env)
 }

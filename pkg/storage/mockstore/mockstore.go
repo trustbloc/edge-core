@@ -41,12 +41,12 @@ func (p *Provider) OpenStore(name string) (storage.Store, error) {
 	return p.Store, p.ErrOpenStoreHandle
 }
 
-// Close closes all stores created under this store provider
+// Close closes all stores created under this store provider.
 func (p *Provider) Close() error {
 	return nil
 }
 
-// CloseStore closes store for given name space
+// CloseStore closes store for given name space.
 func (p *Provider) CloseStore(name string) error {
 	return nil
 }
@@ -64,7 +64,7 @@ type MockStore struct {
 	ResultsIteratorToReturn storage.ResultsIterator
 }
 
-// Put stores the key-value pair
+// Put stores the key-value pair.
 func (s *MockStore) Put(k string, v []byte) error {
 	if k == "" {
 		return storage.ErrKeyRequired
@@ -82,7 +82,7 @@ func (s *MockStore) GetAll() (map[string][]byte, error) {
 	return s.Store, s.ErrGetAll
 }
 
-// Get fetches the value associated with the given key
+// Get fetches the value associated with the given key.
 func (s *MockStore) Get(k string) ([]byte, error) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
