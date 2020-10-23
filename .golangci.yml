@@ -69,6 +69,7 @@ linters:
   disable:
     - maligned
     - prealloc
+    - goerr113   # too strict and forces declaration of sentinel errors: https://github.com/Djarvur/go-err113/issues/10
 
 issues:
   exclude-use-default: false

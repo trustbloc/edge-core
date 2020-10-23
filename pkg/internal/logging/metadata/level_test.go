@@ -3,7 +3,7 @@ Copyright SecureKey Technologies Inc. All Rights Reserved.
 
 SPDX-License-Identifier: Apache-2.0
 */
-package metadata
+package metadata // nolint:testpackage // references internal implementation details
 
 import (
 	"testing"

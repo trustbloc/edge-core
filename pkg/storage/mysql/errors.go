@@ -8,7 +8,7 @@ package mysql
 import "errors"
 
 const (
-	// Error messages we return
+	// Error messages we return.
 	failureWhileOpeningMySQLConnectionErrMsg        = "failure while opening MySQL connection using url %s: %w"
 	failureWhileClosingMySQLConnection              = "failure while closing MySQL DB connection: %w"
 	failureWhilePingingMySQLErrMsg                  = "failure while pinging MySQL at url %s : %w"
@@ -31,10 +31,12 @@ const (
 	failureWhileGettingRowsAffectedErrMsg           = "failure while getting rows affected: %w"
 	failureWhileReleasingResultRows                 = "failure to release result rows: %w"
 
-	// Error messages returned from MySQL that we directly check for
+	// Error messages returned from MySQL that we directly check for.
 	valueNotFoundErrMsgFromMySQL = "no rows"
 )
 
-var errBlankDBPath = errors.New("DB URL for new mySQL DB provider can't be blank")
-var errBlankStoreName = errors.New("store name is required")
-var errNoRowsAffectedByDeleteQuery = errors.New("key not found (no rows were affected by delete query)")
+var (
+	errBlankDBPath                 = errors.New("DB URL for new mySQL DB provider can't be blank")
+	errBlankStoreName              = errors.New("store name is required")
+	errNoRowsAffectedByDeleteQuery = errors.New("key not found (no rows were affected by delete query)")
+)

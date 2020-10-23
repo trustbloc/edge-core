@@ -3,7 +3,7 @@ Copyright SecureKey Technologies Inc. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package tls
+package tls // nolint:testpackage // references internal implementation details
 
 import (
 	"crypto/x509"

@@ -11,8 +11,8 @@ import (
 	"strings"
 )
 
-// levelNames - log level names in string
-var levelNames = []string{ //nolint:gochecknoglobals
+// Levels are the log levels supported.
+var Levels = []string{ // nolint:gochecknoglobals // defines log levels
 	"CRITICAL",
 	"ERROR",
 	"WARNING",
@@ -22,7 +22,7 @@ var levelNames = []string{ //nolint:gochecknoglobals
 
 // ParseLevel returns the log level from a string representation.
 func ParseLevel(level string) (Level, error) {
-	for i, name := range levelNames {
+	for i, name := range Levels {
 		if strings.EqualFold(name, level) {
 			return Level(i), nil
 		}
@@ -31,7 +31,7 @@ func ParseLevel(level string) (Level, error) {
 	return ERROR, errors.New("logger: invalid log level")
 }
 
-// ParseString returns string representation of given log level
+// ParseString returns string representation of given log level.
 func ParseString(level Level) string {
-	return levelNames[level]
+	return Levels[level]
 }

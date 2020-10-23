@@ -28,13 +28,20 @@ const (
 	customLevelOutputExpectedRegex = "\\[%s\\] .* CUSTOM LOG OUTPUT"
 )
 
-//nolint:gochecknoglobals
+// nolint:gochecknoglobals // for testing only
 var buf bytes.Buffer
 
 // VerifyDefaultLogging verifies default logging behaviour.
 // Should only be used for tests.
-func VerifyDefaultLogging(t *testing.T, logger Logger, module string, setLevel func(module string, level metadata.Level)) { //nolint:lll
-	allTestLevels := []metadata.Level{metadata.ERROR, metadata.DEBUG, metadata.INFO, metadata.WARNING, metadata.CRITICAL}
+func VerifyDefaultLogging(t *testing.T,
+	logger Logger, module string, setLevel func(module string, level metadata.Level)) {
+	allTestLevels := []metadata.Level{
+		metadata.ERROR,
+		metadata.DEBUG,
+		metadata.INFO,
+		metadata.WARNING,
+		metadata.CRITICAL,
+	}
 
 	for _, levelEnabled := range allTestLevels {
 		// change log level
@@ -66,6 +73,7 @@ func VerifyDefaultLogging(t *testing.T, logger Logger, module string, setLevel f
 func matchDefLogOutput(t *testing.T, module string, currentLevel, levelEnabled metadata.Level, infoEnabled bool) {
 	if currentLevel > levelEnabled {
 		require.Empty(t, buf.String())
+
 		return
 	}
 
@@ -91,7 +99,13 @@ func matchDefLogOutput(t *testing.T, module string, currentLevel, levelEnabled m
 // Should only be used for tests.
 func VerifyCustomLogger(t *testing.T, logger Logger, module string) {
 	regex := fmt.Sprintf(customLevelOutputExpectedRegex, module)
-	allTestLevels := []metadata.Level{metadata.ERROR, metadata.DEBUG, metadata.INFO, metadata.WARNING, metadata.CRITICAL}
+	allTestLevels := []metadata.Level{
+		metadata.ERROR,
+		metadata.DEBUG,
+		metadata.INFO,
+		metadata.WARNING,
+		metadata.CRITICAL,
+	}
 
 	for _, levelEnabled := range allTestLevels {
 		// change log level
@@ -121,6 +135,7 @@ func VerifyCustomLogger(t *testing.T, logger Logger, module string) {
 func matchCustomLogOutput(t *testing.T, regex string, level, levelEnabled metadata.Level) {
 	if level > levelEnabled {
 		require.Empty(t, buf.String())
+
 		return
 	}
 
@@ -144,6 +159,7 @@ func SwitchLogOutputToBuffer(logger Logger) {
 // GetSampleCustomLogger returns custom logger which can only be used for testing purposes.
 func GetSampleCustomLogger(module string) *SampleLog {
 	logger := log.New(&buf, fmt.Sprintf(logPrefixFormatter, module), log.Ldate|log.Ltime|log.LUTC)
+
 	return &SampleLog{logger}
 }
 
@@ -153,32 +169,32 @@ type SampleLog struct {
 	logger *log.Logger
 }
 
-// Fatalf calls underlying logger.Fatalf
+// Fatalf calls underlying logger.Fatalf.
 func (m *SampleLog) Fatalf(format string, args ...interface{}) {
 	m.logger.Print(customOutput)
 }
 
-// Panicf calls underlying logger.Panicf
+// Panicf calls underlying logger.Panicf.
 func (m *SampleLog) Panicf(format string, args ...interface{}) {
 	m.logger.Print(customOutput)
 }
 
-// Debugf calls error log function if DEBUG level enabled
+// Debugf calls error log function if DEBUG level enabled.
 func (m *SampleLog) Debugf(format string, args ...interface{}) {
 	m.logger.Print(customOutput)
 }
 
-// Infof calls error log function if INFO level enabled
+// Infof calls error log function if INFO level enabled.
 func (m *SampleLog) Infof(format string, args ...interface{}) {
 	m.logger.Print(customOutput)
 }
 
-// Warnf calls error log function if WARNING level enabled
+// Warnf calls error log function if WARNING level enabled.
 func (m *SampleLog) Warnf(format string, args ...interface{}) {
 	m.logger.Print(customOutput)
 }
 
-// Errorf calls error log function if ERROR level enabled
+// Errorf calls error log function if ERROR level enabled.
 func (m *SampleLog) Errorf(format string, args ...interface{}) {
 	m.logger.Print(customOutput)
 }

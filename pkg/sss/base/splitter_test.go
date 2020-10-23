@@ -4,19 +4,21 @@ Copyright SecureKey Technologies Inc. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package base
+package base_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/trustbloc/edge-core/pkg/sss/base"
 )
 
 func TestSplitter(t *testing.T) {
 	secret := []byte("randomSecret")
 
-	sss := Splitter{}
-	secrets, err := sss.Split(secret, DefaultNumParts, DefaultNumParts)
+	sss := base.Splitter{}
+	secrets, err := sss.Split(secret, base.DefaultNumParts, base.DefaultNumParts)
 	require.NoError(t, err)
 
 	t.Run("call Combine with a random part should not match original secret", func(t *testing.T) {

@@ -12,13 +12,13 @@ import (
 	"github.com/trustbloc/edge-core/pkg/storage"
 )
 
-// Provider represents an MemStore implementation of the storage.Provider interface
+// Provider represents an MemStore implementation of the storage.Provider interface.
 type Provider struct {
 	dbs map[string]*MemStore
 	mux sync.RWMutex
 }
 
-// NewProvider instantiates Provider
+// NewProvider instantiates Provider.
 func NewProvider() *Provider {
 	return &Provider{dbs: make(map[string]*MemStore)}
 }

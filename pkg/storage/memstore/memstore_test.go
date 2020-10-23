@@ -4,7 +4,7 @@ Copyright SecureKey Technologies Inc. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package memstore
+package memstore // nolint:testpackage // references internal implementation details
 
 import (
 	"errors"

@@ -3,7 +3,7 @@ Copyright SecureKey Technologies Inc. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package mysql
+package mysql // nolint:testpackage // references internal implementation details
 
 import (
 	"database/sql"
@@ -26,9 +26,11 @@ const (
 	sqlStoreDBURL = "root:my-secret-pw@tcp(127.0.0.1:3306)/"
 )
 
-var _ storage.Provider = (*Provider)(nil)
-var _ storage.Store = (*sqlDBStore)(nil)
-var _ storage.ResultsIterator = (*sqlDBResultsIterator)(nil)
+var (
+	_ storage.Provider        = (*Provider)(nil)
+	_ storage.Store           = (*sqlDBStore)(nil)
+	_ storage.ResultsIterator = (*sqlDBResultsIterator)(nil)
+)
 
 // For these unit tests to run, you must ensure you have a SQL DB instance running at the URL specified in
 // sqlStoreDBURL. 'make unit-test' from the terminal will take care of this for you.
@@ -379,7 +381,7 @@ func TestSQLDBStore(t *testing.T) {
 }
 
 func TestMySqlDBStore_query(t *testing.T) {
-	var storeName = "testIterator"
+	storeName := "testIterator"
 
 	prov, e := NewProvider(sqlStoreDBURL)
 	require.NoError(t, e)
@@ -435,7 +437,6 @@ func TestMySqlDBStore_query(t *testing.T) {
 		indexName := randomPrefix()
 		err := createIndex(store, "`key`", storeName, indexName)
 		require.NoError(t, err)
-		//nolint: gosec
 		itr, err := store.Query("SELECT * FROM " + storeName + "." + storeName + "" +
 			" USE INDEX (" + indexName + ") WHERE `key` = 'abc_124'")
 		require.NoError(t, err)
@@ -461,7 +462,6 @@ func TestMySqlDBStore_query(t *testing.T) {
 			err := createIndex(store, "`key`, value(255)", storeName, indexName)
 			require.NoError(t, err)
 
-			//nolint: gosec
 			itr, err := store.Query("SELECT * FROM " + storeName + "." + storeName + "" +
 				" USE INDEX (" + indexName + ") WHERE `key` = 'abc_124'")
 			require.NoError(t, err)
@@ -483,8 +483,9 @@ func TestMySqlDBStore_query(t *testing.T) {
 			require.NoError(t, err)
 		})
 }
+
 func TestMySqlDBStore_CreateIndex(t *testing.T) {
-	var storeName = "store2"
+	storeName := "store2"
 
 	prov, err := NewProvider(sqlStoreDBURL)
 	require.NoError(t, err)
@@ -502,9 +503,15 @@ func TestMySqlDBStore_CreateIndex(t *testing.T) {
 		err = createIndex(store, "`key`", storeName, indexName)
 		require.NoError(t, err)
 
+		// nolint:rowserrcheck // rows.Err checked on line 51 below
 		rows, errQuery := sqlDBStore.db.Query("SELECT DISTINCT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS" +
 			" WHERE TABLE_NAME = 'store2';")
 		require.NoError(t, errQuery)
+		require.NoError(t, rows.Err())
+
+		defer func() {
+			require.NoError(t, rows.Close())
+		}()
 
 		var IndexName string
 		for rows.Next() {
@@ -705,5 +712,6 @@ func createIndex(store storage.Store, whatToIndex, table, indexName string) erro
 
 func randomPrefix() string {
 	s := uuid.New().String()
+
 	return fmt.Sprintf("test%s", s[strings.LastIndex(s, "-")+1:])
 }

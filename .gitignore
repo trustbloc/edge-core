@@ -27,6 +27,7 @@ cms
 .DS_Store
 
 coverage.out
+coverage.txt
 
 # Exclude build directory
 build

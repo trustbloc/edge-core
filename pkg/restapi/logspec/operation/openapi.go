@@ -9,13 +9,13 @@ package operation
 // emptyRes model
 //
 // swagger:response emptyRes
-type emptyRes struct { // nolint: unused,deadcode
+type emptyRes struct { // nolint:unused,deadcode // struct used only to generate openapi spec
 }
 
 // changeLogSpecReq model
 //
 // swagger:parameters changeLogSpecReq
-type changeLogSpecReq struct { // nolint: unused,deadcode
+type changeLogSpecReq struct { // nolint:unused,deadcode // struct used only to generate openapi spec
 	// in: body
 	Body struct {
 		// The new log specification
@@ -29,7 +29,7 @@ type changeLogSpecReq struct { // nolint: unused,deadcode
 // getLogSpecRes model
 //
 // swagger:response getLogSpecRes
-type getLogSpecRes struct { // nolint: unused,deadcode
+type getLogSpecRes struct { // nolint:unused,deadcode // struct used only to generate openapi spec
 	//in: body
 	logSpec
 }

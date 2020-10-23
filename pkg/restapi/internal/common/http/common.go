@@ -21,20 +21,19 @@ type ErrorResponse struct {
 	Message string `json:"errMessage,omitempty"`
 }
 
-// WriteErrorResponse write error resp
+// WriteErrorResponse write error resp.
 func WriteErrorResponse(rw http.ResponseWriter, status int, msg string) {
 	rw.WriteHeader(status)
 
 	err := json.NewEncoder(rw).Encode(ErrorResponse{
 		Message: msg,
 	})
-
 	if err != nil {
 		logger.Errorf("Unable to send error message, %s", err)
 	}
 }
 
-// WriteResponse writes interface value to response
+// WriteResponse writes interface value to response.
 func WriteResponse(rw io.Writer, v interface{}) {
 	err := json.NewEncoder(rw).Encode(v)
 	if err != nil {

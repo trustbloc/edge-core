@@ -3,7 +3,7 @@ Copyright SecureKey Technologies Inc. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package tls
+package tls_test
 
 import (
 	"io/ioutil"
@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/trustbloc/edge-core/pkg/utils/tls"
 )
 
 const (
@@ -33,7 +35,7 @@ ngzYatfQtNv3/+4V
 
 func TestGetCertPool(t *testing.T) {
 	t.Run("test wrong file path", func(t *testing.T) {
-		certPool, err := GetCertPool(false, []string{"wrongLocation"})
+		certPool, err := tls.GetCertPool(false, []string{"wrongLocation"})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to read cert")
 		require.Nil(t, certPool)
@@ -47,7 +49,7 @@ func TestGetCertPool(t *testing.T) {
 		require.NoError(t, err)
 
 		defer func() { require.NoError(t, os.Remove(file.Name())) }()
-		certPool, err := GetCertPool(false, []string{file.Name()})
+		certPool, err := tls.GetCertPool(false, []string{file.Name()})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to decode pem")
 		require.Nil(t, certPool)
@@ -61,7 +63,7 @@ func TestGetCertPool(t *testing.T) {
 		require.NoError(t, err)
 
 		defer func() { require.NoError(t, os.Remove(file.Name())) }()
-		certPool, err := GetCertPool(false, []string{file.Name()})
+		certPool, err := tls.GetCertPool(false, []string{file.Name()})
 		require.NoError(t, err)
 		require.NotNil(t, certPool)
 	})

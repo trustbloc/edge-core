@@ -4,7 +4,7 @@ Copyright SecureKey Technologies Inc. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package metadata
+package metadata_test
 
 import (
 	"fmt"
@@ -12,83 +12,108 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/trustbloc/edge-core/pkg/internal/logging/metadata"
 )
 
 func TestLevels(t *testing.T) {
 	module := "sample-module-critical"
-	SetLevel(module, CRITICAL)
-	require.Equal(t, CRITICAL, GetLevel(module))
-	verifyLevels(t, module, []Level{CRITICAL}, []Level{ERROR, WARNING, INFO, DEBUG})
+	metadata.SetLevel(module, metadata.CRITICAL)
+	require.Equal(t, metadata.CRITICAL, metadata.GetLevel(module))
+	verifyLevels(t,
+		module,
+		[]metadata.Level{metadata.CRITICAL},
+		[]metadata.Level{metadata.ERROR, metadata.WARNING, metadata.INFO, metadata.DEBUG},
+	)
 
 	module = "sample-module-error"
-	SetLevel(module, ERROR)
-	require.Equal(t, ERROR, GetLevel(module))
-	verifyLevels(t, module, []Level{CRITICAL, ERROR}, []Level{WARNING, INFO, DEBUG})
+	metadata.SetLevel(module, metadata.ERROR)
+	require.Equal(t, metadata.ERROR, metadata.GetLevel(module))
+	verifyLevels(t,
+		module,
+		[]metadata.Level{metadata.CRITICAL, metadata.ERROR},
+		[]metadata.Level{metadata.WARNING, metadata.INFO, metadata.DEBUG},
+	)
 
 	module = "sample-module-warning"
-	SetLevel(module, WARNING)
-	require.Equal(t, WARNING, GetLevel(module))
-	verifyLevels(t, module, []Level{CRITICAL, ERROR, WARNING}, []Level{INFO, DEBUG})
+	metadata.SetLevel(module, metadata.WARNING)
+	require.Equal(t, metadata.WARNING, metadata.GetLevel(module))
+	verifyLevels(t,
+		module,
+		[]metadata.Level{metadata.CRITICAL, metadata.ERROR, metadata.WARNING},
+		[]metadata.Level{metadata.INFO, metadata.DEBUG},
+	)
 
 	module = "sample-module-info"
-	SetLevel(module, INFO)
-	require.Equal(t, INFO, GetLevel(module))
-	verifyLevels(t, module, []Level{CRITICAL, ERROR, WARNING, INFO}, []Level{DEBUG})
+	metadata.SetLevel(module, metadata.INFO)
+	require.Equal(t, metadata.INFO, metadata.GetLevel(module))
+	verifyLevels(t,
+		module,
+		[]metadata.Level{metadata.CRITICAL, metadata.ERROR, metadata.WARNING, metadata.INFO},
+		[]metadata.Level{metadata.DEBUG},
+	)
 
 	module = "sample-module-debug"
-	SetLevel(module, DEBUG)
-	require.Equal(t, DEBUG, GetLevel(module))
-	verifyLevels(t, module, []Level{CRITICAL, ERROR, WARNING, INFO, DEBUG}, []Level{})
+	metadata.SetLevel(module, metadata.DEBUG)
+	require.Equal(t, metadata.DEBUG, metadata.GetLevel(module))
+	verifyLevels(t,
+		module,
+		[]metadata.Level{metadata.CRITICAL, metadata.ERROR, metadata.WARNING, metadata.INFO, metadata.DEBUG},
+		[]metadata.Level{},
+	)
 }
 
 func TestGetAllLevels(t *testing.T) {
 	sampleModuleCritical := "sample-module-critical"
-	SetLevel(sampleModuleCritical, CRITICAL)
+	metadata.SetLevel(sampleModuleCritical, metadata.CRITICAL)
 
 	sampleModuleWarning := "sample-module-warning"
-	SetLevel(sampleModuleWarning, WARNING)
+	metadata.SetLevel(sampleModuleWarning, metadata.WARNING)
 
-	allLogLevels := GetAllLevels()
-	require.Equal(t, Level(0), allLogLevels[sampleModuleCritical])
-	require.Equal(t, Level(2), allLogLevels[sampleModuleWarning])
+	allLogLevels := metadata.GetAllLevels()
+	require.Equal(t, metadata.Level(0), allLogLevels[sampleModuleCritical])
+	require.Equal(t, metadata.Level(2), allLogLevels[sampleModuleWarning])
 }
 
 func TestCallerInfos(t *testing.T) {
+	// nolint:gosec // use of weak random num generator is fine for these tests
 	module := fmt.Sprintf("sample-module-caller-info-%d-%d", rand.Intn(1000), rand.Intn(1000))
 
-	require.True(t, IsCallerInfoEnabled(module, CRITICAL))
-	require.True(t, IsCallerInfoEnabled(module, DEBUG))
-	require.True(t, IsCallerInfoEnabled(module, INFO))
-	require.True(t, IsCallerInfoEnabled(module, ERROR))
-	require.True(t, IsCallerInfoEnabled(module, WARNING))
+	require.True(t, metadata.IsCallerInfoEnabled(module, metadata.CRITICAL))
+	require.True(t, metadata.IsCallerInfoEnabled(module, metadata.DEBUG))
+	require.True(t, metadata.IsCallerInfoEnabled(module, metadata.INFO))
+	require.True(t, metadata.IsCallerInfoEnabled(module, metadata.ERROR))
+	require.True(t, metadata.IsCallerInfoEnabled(module, metadata.WARNING))
 
-	ShowCallerInfo(module, CRITICAL)
-	ShowCallerInfo(module, DEBUG)
-	HideCallerInfo(module, INFO)
-	HideCallerInfo(module, ERROR)
-	HideCallerInfo(module, WARNING)
+	metadata.ShowCallerInfo(module, metadata.CRITICAL)
+	metadata.ShowCallerInfo(module, metadata.DEBUG)
+	metadata.HideCallerInfo(module, metadata.INFO)
+	metadata.HideCallerInfo(module, metadata.ERROR)
+	metadata.HideCallerInfo(module, metadata.WARNING)
 
-	require.True(t, IsCallerInfoEnabled(module, CRITICAL))
-	require.True(t, IsCallerInfoEnabled(module, DEBUG))
-	require.False(t, IsCallerInfoEnabled(module, INFO))
-	require.False(t, IsCallerInfoEnabled(module, ERROR))
-	require.False(t, IsCallerInfoEnabled(module, WARNING))
+	require.True(t, metadata.IsCallerInfoEnabled(module, metadata.CRITICAL))
+	require.True(t, metadata.IsCallerInfoEnabled(module, metadata.DEBUG))
+	require.False(t, metadata.IsCallerInfoEnabled(module, metadata.INFO))
+	require.False(t, metadata.IsCallerInfoEnabled(module, metadata.ERROR))
+	require.False(t, metadata.IsCallerInfoEnabled(module, metadata.WARNING))
 
-	require.True(t, IsCallerInfoEnabled(module, CRITICAL))
-	require.True(t, IsCallerInfoEnabled(module, DEBUG))
-	require.False(t, IsCallerInfoEnabled(module, INFO))
-	require.False(t, IsCallerInfoEnabled(module, ERROR))
-	require.False(t, IsCallerInfoEnabled(module, WARNING))
+	require.True(t, metadata.IsCallerInfoEnabled(module, metadata.CRITICAL))
+	require.True(t, metadata.IsCallerInfoEnabled(module, metadata.DEBUG))
+	require.False(t, metadata.IsCallerInfoEnabled(module, metadata.INFO))
+	require.False(t, metadata.IsCallerInfoEnabled(module, metadata.ERROR))
+	require.False(t, metadata.IsCallerInfoEnabled(module, metadata.WARNING))
 }
 
-func verifyLevels(t *testing.T, module string, enabled, disabled []Level) {
+func verifyLevels(t *testing.T, module string, enabled, disabled []metadata.Level) {
 	for _, level := range enabled {
-		actual := IsEnabledFor(module, level)
-		require.True(t, actual, "expected level [%s] to be enabled for module [%s]", ParseString(level), module)
+		actual := metadata.IsEnabledFor(module, level)
+		require.True(t,
+			actual, "expected level [%s] to be enabled for module [%s]", metadata.ParseString(level), module)
 	}
 
 	for _, level := range disabled {
-		actual := IsEnabledFor(module, level)
-		require.False(t, actual, "expected level [%s] to be disabled for module [%s]", ParseString(level), module)
+		actual := metadata.IsEnabledFor(module, level)
+		require.False(t,
+			actual, "expected level [%s] to be disabled for module [%s]", metadata.ParseString(level), module)
 	}
 }

@@ -3,7 +3,7 @@ Copyright SecureKey Technologies Inc. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package couchdbstore
+package couchdbstore // nolint:testpackage // references internal implementation details
 
 import (
 	"context"
@@ -39,10 +39,13 @@ const (
 	testDBPrefix               = "dbprefix"
 )
 
-var mockLoggerProvider = mocklogger.Provider{MockLogger: &mocklogger.MockLogger{}} //nolint: gochecknoglobals
-var errFailingMarshal = errors.New("failingMarshal always fails")
-var errFailingReadAll = errors.New("failingReadAll always fails")
-var errFailingUnquote = errors.New("failingUnquote always fails")
+// nolint:gochecknoglobals // test globals
+var (
+	mockLoggerProvider = mocklogger.Provider{MockLogger: &mocklogger.MockLogger{}}
+	errFailingMarshal  = errors.New("failingMarshal always fails")
+	errFailingReadAll  = errors.New("failingReadAll always fails")
+	errFailingUnquote  = errors.New("failingUnquote always fails")
+)
 
 type mockPinger struct{}
 
@@ -712,7 +715,6 @@ func initializeTest(t *testing.T, opts ...Option) *Provider {
 // Wipes out the test database that may still exist from a previous test.
 func resetCouchDB(t *testing.T, p *Provider) {
 	err := p.couchDBClient.DestroyDB(context.Background(), testStoreName)
-
 	if err != nil {
 		require.Equal(t, "Not Found: Database does not exist.", err.Error())
 	}

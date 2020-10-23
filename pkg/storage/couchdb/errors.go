@@ -8,7 +8,7 @@ package couchdbstore
 import "errors"
 
 const (
-	// Error messages we return
+	// Error messages we return.
 	dbNotReadyErrMsg                                   = "DB does not yet exist - CouchDB might not be fully initialized"
 	failToPingCouchDB                                  = "failure while pinging couchDB: %w"
 	failToInstantiateKivikClientErrMsg                 = "failure while instantiate Kivik CouchDB client: %w"
@@ -38,12 +38,14 @@ const (
 	failureWhileGettingAllDocs               = "failure while getting all docs: %w"
 	failureWhileGettingAllKeyValuePairs      = "failure while getting all key-value pairs: %w"
 
-	// Error messages returned from Kivik CouchDB client that we directly check for
+	// Error messages returned from Kivik CouchDB client that we directly check for.
 	duplicateDBErrMsgFromKivik = "Precondition Failed: The database could not be created, the file already exists."
 	docNotFoundErrMsgFromKivik = "Not Found: missing"
 	docDeletedErrMsgFromKivik  = "Not Found: deleted"
 )
 
-var errBlankHost = errors.New("hostURL for new CouchDB provider can't be blank")
-var errMissingRevIDField = errors.New("the retrieved CouchDB document is missing the _rev field")
-var errFailToAssertRevIDAsString = errors.New("failed to assert the retrieved rev ID as a string")
+var (
+	errBlankHost                 = errors.New("hostURL for new CouchDB provider can't be blank")
+	errMissingRevIDField         = errors.New("the retrieved CouchDB document is missing the _rev field")
+	errFailToAssertRevIDAsString = errors.New("failed to assert the retrieved rev ID as a string")
+)

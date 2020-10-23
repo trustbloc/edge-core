@@ -13,7 +13,7 @@ import (
 )
 
 // loggerProviderInstance is logger factory singleton - access only via loggerProvider()
-//nolint:gochecknoglobals
+// nolint:gochecknoglobals // package-private globals
 var (
 	loggerProviderInstance LoggerProvider
 	loggerProviderOnce     sync.Once
@@ -42,7 +42,7 @@ func loggerProvider() LoggerProvider {
 }
 
 // modlogProvider is a module based logger provider wrapped on given custom logging provider
-// if custom logger provider is not provided, then default logger will be used
+// if custom logger provider is not provided, then default logger will be used.
 type modlogProvider struct {
 	custom LoggerProvider
 }

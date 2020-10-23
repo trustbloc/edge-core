@@ -11,7 +11,7 @@
 Edge Core implements core components that are shared between various edge services. 
 
 ## Prerequisites (General)
-- Go 1.13
+- Go 1.15
 
 ## Targets
 ```

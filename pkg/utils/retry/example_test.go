@@ -3,11 +3,13 @@ Copyright SecureKey Technologies Inc. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 */
 
-package retry
+package retry_test
 
 import (
 	"errors"
 	"fmt"
+
+	"github.com/trustbloc/edge-core/pkg/utils/retry"
 )
 
 // Shows how to wrap a sample function into an invocation for use with the Retry function.
@@ -18,13 +20,13 @@ func Example() {
 
 	// InitialBackoff and BackoffFactor are set to zero here in order to ensure this example runs quickly,
 	// but normally you would want to pick reasonable values.
-	retryParams := Params{
+	retryParams := retry.Params{
 		MaxRetries:     5,
 		InitialBackoff: 0,
 		BackoffFactor:  0,
 	}
 
-	err := Retry(func() error {
+	err := retry.Retry(func() error {
 		var weatherCallErr error
 		marsWeather, weatherCallErr = fetcher.getWeatherOnMars()
 
