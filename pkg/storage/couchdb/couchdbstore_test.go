@@ -261,6 +261,17 @@ func TestCouchDBStore_Put(t *testing.T) {
 		err = store.Put(testDocKey, []byte(testJSONValue1))
 		require.NoError(t, err)
 	})
+	t.Run("Error while getting rev ID - database does not exist", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+		err := provider.couchDBClient.DestroyDB(context.Background(), testStoreName)
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey, []byte(testJSONValue1))
+		require.NotNil(t, err)
+		require.Contains(t, err.Error(), "failure while getting rev ID")
+	})
 	t.Run("Error while adding rev ID", func(t *testing.T) {
 		provider := initializeTest(t)
 
