@@ -234,8 +234,7 @@ func (c *CouchDBStore) Put(k string, v []byte) error {
 	}
 
 	revID, err := c.getRevID(k)
-	if err != nil && !errors.Is(err, storage.ErrValueNotFound) &&
-		!strings.Contains(err.Error(), docDeletedErrMsgFromKivik) {
+	if err != nil && !errors.Is(err, storage.ErrValueNotFound) {
 		return fmt.Errorf(getRevIDFailureErrMsg, err)
 	}
 
@@ -458,7 +457,8 @@ func (c *CouchDBStore) getRawDoc(k string) (map[string]interface{}, error) {
 
 	err := row.ScanDoc(&rawDoc)
 	if err != nil {
-		if strings.Contains(err.Error(), docNotFoundErrMsgFromKivik) {
+		if strings.Contains(err.Error(), docNotFoundErrMsgFromKivik) ||
+			strings.Contains(err.Error(), docDeletedErrMsgFromKivik) {
 			return nil, fmt.Errorf(failureWhileScanningResultRowsDoc, storage.ErrValueNotFound)
 		}
 
