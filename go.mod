@@ -14,9 +14,16 @@ require (
 	github.com/go-kivik/kivik v2.0.0+incompatible
 	github.com/go-kivik/kiviktest v2.0.0+incompatible // indirect
 	github.com/go-sql-driver/mysql v1.5.0
-	github.com/google/uuid v1.1.1
+	github.com/google/uuid v1.1.2
+	github.com/gopherjs/gopherjs v0.0.0-20200217142428-fce0ec30dd00 // indirect
 	github.com/hashicorp/vault v1.2.1-0.20200911125421-dba37adcb55a
+	github.com/hyperledger/aries-framework-go v0.1.5-0.20201028150746-ac94a4739fb3
 	github.com/spf13/cobra v0.0.6
 	github.com/stretchr/testify v1.6.1
 	gitlab.com/flimzy/testy v0.2.1 // indirect
+)
+
+replace (
+	github.com/kilic/bls12-381 => github.com/trustbloc/bls12-381 v0.0.0-20201008080608-ba2e87ef05ef
+	github.com/phoreproject/bls => github.com/trustbloc/bls v0.0.0-20201023141329-a1e218beb89e
 )
