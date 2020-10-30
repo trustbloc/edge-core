@@ -7,13 +7,21 @@ SPDX-License-Identifier: Apache-2.0
 package zcapld
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/jsonld"
+	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/verifier"
+	"github.com/piprate/json-gold/ld"
 )
 
 // Verifier verifies zcaps.
 type Verifier struct {
-	zcaps CapabilityResolver
+	zcaps      CapabilityResolver
+	keys       KeyResolver
+	verifier   *verifier.DocumentVerifier
+	ldProcOpts []jsonld.ProcessorOpts
 }
 
 // Proof describes the capability, the action, and the verification method of an invocation.
@@ -23,9 +31,51 @@ type Proof struct {
 	VerificationMethod string
 }
 
+// VerificationOptions holds options for the Verifier.
+type VerificationOptions struct {
+	LDProcessorOptions []jsonld.ProcessorOpts
+	SignatureSuites    []verifier.SignatureSuite
+}
+
+// VerificationOption sets an option for the Verifier.
+type VerificationOption func(*VerificationOptions)
+
+// WithSignatureSuites sets the signature suites supported by the Verifier.
+func WithSignatureSuites(suites ...verifier.SignatureSuite) VerificationOption {
+	return func(o *VerificationOptions) {
+		o.SignatureSuites = append(o.SignatureSuites, suites...)
+	}
+}
+
+// WithLDDocumentLoaders sets the JSON-LD document loaders for the Verifier.
+func WithLDDocumentLoaders(loaders ...ld.DocumentLoader) VerificationOption {
+	return func(o *VerificationOptions) {
+		for i := range loaders {
+			o.LDProcessorOptions = append(o.LDProcessorOptions, jsonld.WithDocumentLoader(loaders[i]))
+		}
+	}
+}
+
 // NewVerifier returns a new Verifier.
-func NewVerifier(zcapResolver CapabilityResolver) (*Verifier, error) {
-	return &Verifier{zcaps: zcapResolver}, nil
+func NewVerifier(
+	zcapResolver CapabilityResolver, keyResolver KeyResolver, options ...VerificationOption) (*Verifier, error) {
+	opts := &VerificationOptions{}
+
+	for i := range options {
+		options[i](opts)
+	}
+
+	v, err := verifier.New(keyResolver, opts.SignatureSuites...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init document verifier: %w", err)
+	}
+
+	return &Verifier{
+		zcaps:      zcapResolver,
+		keys:       keyResolver,
+		verifier:   v,
+		ldProcOpts: opts.LDProcessorOptions,
+	}, nil
 }
 
 // Verify the proof against the invocation.
@@ -67,6 +117,11 @@ func (v *Verifier) Verify(proof *Proof, invocation *CapabilityInvocation) error 
 	// TODO verify authorization of verificationMethod.ID by controller for proof purpose `capabilityInvocation`.
 	//  Controller are probably DIDs. They have a "capabilityInvocation" property (just like DIDs) that has
 	//  verificationMethod IDs.
+
+	err = v.verifyProof(proof.Capability)
+	if err != nil {
+		return fmt.Errorf("failed to verify proof: %w", err)
+	}
 
 	return nil
 }
@@ -161,6 +216,20 @@ func (v *Verifier) verifyCapabilityChain(
 	// TODO add support. First figure out why capabilityChain is an array.
 	if len(capabilityChain) > 0 {
 		return errors.New("multiple capabilityChains not supported yet")
+	}
+
+	return nil
+}
+
+func (v *Verifier) verifyProof(capability *Capability) error {
+	bits, err := json.Marshal(capability)
+	if err != nil {
+		return fmt.Errorf("failed to marshal capability: %w", err)
+	}
+
+	err = v.verifier.Verify(bits, v.ldProcOpts...)
+	if err != nil {
+		return fmt.Errorf("document verifier error: %w", err)
 	}
 
 	return nil

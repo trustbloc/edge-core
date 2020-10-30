@@ -15,6 +15,11 @@ import (
 )
 
 const (
+	// SecurityContextV2 is the JSON-LD context used in ZCAP-LD documents.
+	SecurityContextV2 = "https://w3id.org/security/v2"
+	// ProofPurpose is the proofPurpose set on proofs in ZCAP-LD documents.
+	ProofPurpose = "capabilityDelegation"
+
 	proofPurposeField         = "proofPurpose"
 	proofCapabilityChainField = "capabilityChain"
 )
@@ -35,15 +40,16 @@ type VerificationMethod struct {
 
 // Capability is a ZCAP.
 type Capability struct {
+	Context          string             `json:"@context"`
 	ID               string             `json:"id"`
-	Invoker          string             `json:"invoker"`
-	Controller       string             `json:"controller"`
-	Delegator        string             `json:"delegator"`
-	Parent           string             `json:"parentCapability"`
-	Nonce            string             `json:"nonce"`
-	AllowedAction    []string           `json:"allowedAction"`
+	Invoker          string             `json:"invoker,omitempty"`
+	Controller       string             `json:"controller,omitempty"`
+	Delegator        string             `json:"delegator,omitempty"`
+	Parent           string             `json:"parentCapability,omitempty"`
+	Nonce            string             `json:"nonce,omitempty"`
+	AllowedAction    []string           `json:"allowedAction,omitempty"`
 	InvocationTarget InvocationTarget   `json:"invocationTarget"`
-	Proof            []verifiable.Proof `json:"proof"`
+	Proof            []verifiable.Proof `json:"proof,omitempty"`
 }
 
 // InvocationTarget is the target on which the capability applies.
