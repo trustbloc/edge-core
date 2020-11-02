@@ -46,7 +46,6 @@ type Capability struct {
 	Controller       string             `json:"controller,omitempty"`
 	Delegator        string             `json:"delegator,omitempty"`
 	Parent           string             `json:"parentCapability,omitempty"`
-	Nonce            string             `json:"nonce,omitempty"`
 	AllowedAction    []string           `json:"allowedAction,omitempty"`
 	InvocationTarget InvocationTarget   `json:"invocationTarget"`
 	Proof            []verifiable.Proof `json:"proof,omitempty"`
