@@ -14,6 +14,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/hyperledger/aries-framework-go/pkg/crypto"
+	"github.com/hyperledger/aries-framework-go/pkg/kms"
+	"github.com/hyperledger/aries-framework-go/pkg/kms/localkms"
 	httpsig "github.com/igor-pavlenko/httpsignatures-go"
 )
 
@@ -26,6 +29,8 @@ const (
 	keyIDParam                     = "keyId"
 )
 
+const ariesDIDKeyCustomHTTPSigAlgorithm = "https://github.com/hyperledger/aries-framework-go/zcaps"
+
 // HTTPSigAuthConfig configures the HTTP auth handler.
 type HTTPSigAuthConfig struct {
 	CapabilityResolver CapabilityResolver
@@ -33,6 +38,8 @@ type HTTPSigAuthConfig struct {
 	VerifierOptions    []VerificationOption
 	Secrets            httpsig.Secrets
 	ErrConsumer        func(error)
+	KMS                kms.KeyManager
+	Crypto             crypto.Crypto
 }
 
 // InvocationExpectations are set by the application's context as parameters to expect for any given invocation.
@@ -40,6 +47,79 @@ type InvocationExpectations struct {
 	Target         string
 	RootCapability string
 	Action         string
+}
+
+// AriesDIDKeySecrets is a secrets storage that can return did:key httpsignatures.Secrets.
+// Based on workaround suggested by library authors here: https://github.com/igor-pavlenko/httpsignatures-go/issues/5.
+type AriesDIDKeySecrets struct {
+}
+
+// Get returns a did:key secret.
+func (a *AriesDIDKeySecrets) Get(keyID string) (httpsig.Secret, error) {
+	return httpsig.Secret{
+		KeyID:     keyID,
+		Algorithm: ariesDIDKeyCustomHTTPSigAlgorithm,
+	}, nil
+}
+
+// AriesDIDKeySignatureHashAlgorithm is a custom httpsignatures.SignatureHashAlgorithm composed of
+// the aries framework's KMS and Crypto apis, and designed to work with did:key.
+// Based on workaround suggested by library authors here: https://github.com/igor-pavlenko/httpsignatures-go/issues/5.
+type AriesDIDKeySignatureHashAlgorithm struct {
+	Crypto crypto.Crypto
+	KMS    kms.KeyManager
+}
+
+// Algorithm returns this algorithm's name.
+func (a *AriesDIDKeySignatureHashAlgorithm) Algorithm() string {
+	return ariesDIDKeyCustomHTTPSigAlgorithm
+}
+
+// Create signs data with the secret.
+func (a *AriesDIDKeySignatureHashAlgorithm) Create(secret httpsig.Secret, data []byte) ([]byte, error) {
+	key, err := (&DIDKeyResolver{}).Resolve(secret.KeyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve did:key URL %s: %w", secret.KeyID, err)
+	}
+
+	// TODO we are assuming curve: https://github.com/trustbloc/edge-core/issues/108.
+	// TODO we shouldn't be using a `localkms` function: https://github.com/trustbloc/edge-core/issues/109.
+	kid, err := localkms.CreateKID(key.Value, kms.ED25519)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create KID from did:key: %w", err)
+	}
+
+	kh, err := a.KMS.Get(kid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get key handle for kid %s: %w", kid, err)
+	}
+
+	sig, err := a.Crypto.Sign(data, kh)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign data: %w", err)
+	}
+
+	return sig, nil
+}
+
+// Verify verifies the signature over data with the secret.
+func (a *AriesDIDKeySignatureHashAlgorithm) Verify(secret httpsig.Secret, data, signature []byte) error {
+	key, err := (&DIDKeyResolver{}).Resolve(secret.KeyID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve did:key URL %s: %w", secret.KeyID, err)
+	}
+
+	kh, err := a.KMS.PubKeyBytesToHandle(key.Value, kms.ED25519)
+	if err != nil {
+		return fmt.Errorf("failed to convert did:key pubkey to aries kms handle: %w", err)
+	}
+
+	err = a.Crypto.Verify(signature, data, kh)
+	if err != nil {
+		return fmt.Errorf("failed to verify signature: %w", err)
+	}
+
+	return nil
 }
 
 // NewHTTPSigAuthHandler authenticates and authorizes a request before forwarding to 'next'.
@@ -55,14 +135,7 @@ func NewHTTPSigAuthHandler(
 // TODO ability to configure allowed expiry time and clock skew: https://github.com/trustbloc/edge-core/issues/103.
 func authZHandleFunc(w http.ResponseWriter, r *http.Request,
 	config *HTTPSigAuthConfig, expect *InvocationExpectations, next http.HandlerFunc) {
-	hs := httpsig.NewHTTPSignatures(config.Secrets)
-
-	// setting these:
-	// nolint:lll // should not break the link below into separate lines
-	// https://github.com/digitalbazaar/http-signature-zcap-verify/blob/aead239ea7567c501fac1f0baf901784be276536/main.js#L30-L34
-	hs.SetDefaultSignatureHeaders([]string{
-		"(key-id)", "(created)", "(expires)", "(request-target)", "host", CapabilityInvocationHTTPHeader,
-	})
+	hs := httpSig(config)
 
 	err := hs.Verify(r)
 	if err != nil {
@@ -108,6 +181,24 @@ func authZHandleFunc(w http.ResponseWriter, r *http.Request,
 	}
 
 	next(w, r)
+}
+
+func httpSig(config *HTTPSigAuthConfig) *httpsig.HTTPSignatures {
+	hs := httpsig.NewHTTPSignatures(config.Secrets)
+
+	// setting these:
+	// nolint:lll // should not break the link below into separate lines
+	// https://github.com/digitalbazaar/http-signature-zcap-verify/blob/aead239ea7567c501fac1f0baf901784be276536/main.js#L30-L34
+	hs.SetDefaultSignatureHeaders([]string{
+		"(key-id)", "(created)", "(expires)", "(request-target)", "host", CapabilityInvocationHTTPHeader,
+	})
+
+	hs.SetSignatureHashAlgorithm(&AriesDIDKeySignatureHashAlgorithm{
+		Crypto: config.Crypto,
+		KMS:    config.KMS,
+	})
+
+	return hs
 }
 
 func maybeConsumeError(consumer func(error), err error) {
