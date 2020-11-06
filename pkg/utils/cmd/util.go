@@ -14,6 +14,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// GetUserSetOptionalVarFromString returns values either command line flag or environment variable.
+func GetUserSetOptionalVarFromString(cmd *cobra.Command, flagName, envKey string) string {
+	//nolint // the error will not happen for optional var
+	v, _ := GetUserSetVarFromString(cmd, flagName, envKey, true)
+
+	return v
+}
+
 // GetUserSetVarFromString returns values either command line flag or environment variable.
 func GetUserSetVarFromString(cmd *cobra.Command, flagName, envKey string, isOptional bool) (string, error) {
 	if cmd.Flags().Changed(flagName) {
@@ -41,6 +49,14 @@ func GetUserSetVarFromString(cmd *cobra.Command, flagName, envKey string, isOpti
 
 	return "", errors.New("Neither " + flagName + " (command line flag) nor " + envKey +
 		" (environment variable) have been set.")
+}
+
+// GetUserSetOptionalVarFromArrayString returns values either command line flag or environment variable.
+func GetUserSetOptionalVarFromArrayString(cmd *cobra.Command, flagName, envKey string) []string {
+	//nolint // reason the error will not happen for optional var
+	v, _ := GetUserSetVarFromArrayString(cmd, flagName, envKey, true)
+
+	return v
 }
 
 // GetUserSetVarFromArrayString returns values either command line flag or environment variable.

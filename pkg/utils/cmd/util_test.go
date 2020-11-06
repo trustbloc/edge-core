@@ -133,6 +133,9 @@ func TestGetUserSetVarFromString(t *testing.T) {
 	env, err = cmd.GetUserSetVarFromString(command, flagName, "", false)
 	require.NoError(t, err)
 	require.Equal(t, "other", env)
+
+	env = cmd.GetUserSetOptionalVarFromString(command, flagName, "")
+	require.Equal(t, "other", env)
 }
 
 func TestGetUserSetVarFromArrayString(t *testing.T) {
@@ -167,5 +170,8 @@ func TestGetUserSetVarFromArrayString(t *testing.T) {
 	// test resolution via command line argument - no environment variable set
 	env, err = cmd.GetUserSetVarFromArrayString(command, flagName, "", false)
 	require.NoError(t, err)
+	require.Equal(t, []string{"other", "other1"}, env)
+
+	env = cmd.GetUserSetOptionalVarFromArrayString(command, flagName, "")
 	require.Equal(t, []string{"other", "other1"}, env)
 }
