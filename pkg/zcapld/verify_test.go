@@ -10,15 +10,11 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperledger/aries-framework-go/pkg/crypto/tinkcrypto"
-	"github.com/hyperledger/aries-framework-go/pkg/doc/jose"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/proof"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/signer"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/suite"
@@ -32,8 +28,6 @@ import (
 	mockkms "github.com/hyperledger/aries-framework-go/pkg/mock/kms"
 	"github.com/hyperledger/aries-framework-go/pkg/mock/storage"
 	"github.com/hyperledger/aries-framework-go/pkg/secretlock/noop"
-	"github.com/hyperledger/aries-framework-go/pkg/vdr/fingerprint"
-	"github.com/piprate/json-gold/ld"
 	"github.com/stretchr/testify/require"
 
 	"github.com/trustbloc/edge-core/pkg/zcapld"
@@ -809,70 +803,4 @@ func parseProof(t *testing.T, signedZcap []byte) []verifiable.Proof {
 	t.Fatalf("failed to parseProof: %s", err.Error())
 
 	return nil
-}
-
-func keyID(sigSigner signature.Signer) string {
-	// source: https://github.com/multiformats/multicodec/blob/master/table.csv.
-	const ed25519pub = 0xed // Ed25519 public key in multicodec table
-
-	thumb := fingerprint.KeyFingerprint(ed25519pub, sigSigner.PublicKeyBytes())
-
-	return fmt.Sprintf("did:key:%s", thumb)
-}
-
-func keyValue(t *testing.T, sigSigner signature.Signer) *ariesver.PublicKey {
-	t.Helper()
-
-	jwk, err := jose.JWKFromPublicKey(sigSigner.PublicKey())
-	require.NoError(t, err)
-
-	return &ariesver.PublicKey{
-		Type:  "JwsVerificationKey2020",
-		Value: sigSigner.PublicKeyBytes(),
-		JWK:   jwk,
-	}
-}
-
-func createTestJSONLDDocumentLoader() *ld.CachingDocumentLoader {
-	loader := verifiable.CachingJSONLDLoader()
-
-	contexts := []struct {
-		vocab    string
-		filename string
-	}{
-		{
-			vocab:    "https://w3id.org/security/v1",
-			filename: "w3id.org.security.v1.json",
-		},
-		{
-			vocab:    "https://w3id.org/security/v2",
-			filename: "w3id.org.security.v2.json",
-		},
-	}
-
-	for i := range contexts {
-		addJSONLDCachedContextFromFile(loader, contexts[i].vocab, contexts[i].filename)
-	}
-
-	return loader
-}
-
-func addJSONLDCachedContextFromFile(loader *ld.CachingDocumentLoader, contextURL, contextFile string) {
-	contextContent, err := ioutil.ReadFile( // nolint:gosec // contextFiles are safely set by test params above
-		filepath.Join(filepath.Clean("testdata/context"), contextFile),
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	addJSONLDCachedContext(loader, contextURL, string(contextContent))
-}
-
-func addJSONLDCachedContext(loader *ld.CachingDocumentLoader, contextURL, contextContent string) {
-	reader, err := ld.DocumentFromReader(strings.NewReader(contextContent))
-	if err != nil {
-		panic(err)
-	}
-
-	loader.AddDocument(contextURL, reader)
 }
