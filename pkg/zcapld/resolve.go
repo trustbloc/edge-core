@@ -71,11 +71,11 @@ func (d *DIDKeyResolver) Resolve(didKeyURL string) (*verifier.PublicKey, error) 
 	}
 
 	for _, vm := range doc.VerificationMethods(did.CapabilityDelegation)[did.CapabilityDelegation] {
-		if parts[1] == vm.PublicKey.ID || didKeyURL == vm.PublicKey.ID {
+		if parts[1] == vm.VerificationMethod.ID || didKeyURL == vm.VerificationMethod.ID {
 			return &verifier.PublicKey{
-				Type:  vm.PublicKey.Type,
-				Value: vm.PublicKey.Value,
-				JWK:   vm.PublicKey.JSONWebKey(),
+				Type:  vm.VerificationMethod.Type,
+				Value: vm.VerificationMethod.Value,
+				JWK:   vm.VerificationMethod.JSONWebKey(),
 			}, nil
 		}
 	}
