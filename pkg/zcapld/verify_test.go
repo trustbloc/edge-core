@@ -494,27 +494,6 @@ func TestVerifier_Verify(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "the root capability must not specify a different invocation target")
 	})
-
-	t.Run("error: no support for multiple capabilityChains", func(t *testing.T) {
-		root, rootSigner := selfSignedRootCapability(t, kms.ED25519, ed25519signature2018.SignatureType)
-		capability := capability(t, rootSigner, ed25519signature2018.SignatureType,
-			withParent(root.ID), withCapabilityChain([]interface{}{root.ID + "123", root.ID}))
-		verifier := verifier(t,
-			zcapld.SimpleCapabilityResolver{
-				root.ID:         root,
-				root.ID + "123": root,
-			}, zcapld.SimpleKeyResolver{})
-		err := verifier.Verify(
-			&zcapld.Proof{
-				Capability:         capability,
-				CapabilityAction:   "read",
-				VerificationMethod: capability.Invoker,
-			},
-			invocation(capability.Invoker, expectRootCapability(root.ID)),
-		)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "multiple capabilityChains not supported yet")
-	})
 }
 
 func verifier(t *testing.T, r zcapld.CapabilityResolver, k zcapld.KeyResolver) *zcapld.Verifier {
