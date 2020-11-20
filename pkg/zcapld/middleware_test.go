@@ -1133,6 +1133,491 @@ func TestNewHTTPSigAuthorizationHandler(t *testing.T) {
 		require.Contains(t, logErr.Error(), `invalid key=value format`)
 		require.False(t, executed)
 	})
+
+	t.Run("multi-level delegation", func(t *testing.T) {
+		t.Run("2-level: authorizes valid request", func(t *testing.T) {
+			var logErr error
+			executed := false
+			next := func(w http.ResponseWriter, r *http.Request) {
+				executed = true
+			}
+			logger := func(e error) {
+				logErr = e
+			}
+			// server creates a resource and a ZCAP for its own resource
+			resource := fmt.Sprintf("http://www.example.org/foo/documents/%s", uuid.New().String())
+			server := newAgent(t)
+			serverSigner := server.signer()
+			serverVerMethod := didKeyURL(serverSigner)
+			serverZCAP, err := zcapld.NewCapability(
+				&zcapld.Signer{
+					SignatureSuite:     ed25519signature2018.New(suite.WithSigner(serverSigner)),
+					SuiteType:          ed25519signature2018.SignatureType,
+					VerificationMethod: serverVerMethod,
+				},
+				zcapld.WithAllowedActions("read", "write", "archive"),
+				zcapld.WithInvocationTarget(resource, "urn:edv:document"),
+				zcapld.WithID(resource),
+			)
+			require.NoError(t, err)
+
+			client := newAgent(t)
+			clientSigner := client.signer()
+			clientVerMethod := didKeyURL(clientSigner)
+
+			// server creates a ZCAP for the client that owns this resource
+			// notice the allowed actions have been attenuated - the client cannot "archive" the resource
+			clientZCAP, err := zcapld.NewCapability(
+				&zcapld.Signer{
+					SignatureSuite:     ed25519signature2018.New(suite.WithSigner(serverSigner)),
+					SuiteType:          ed25519signature2018.SignatureType,
+					VerificationMethod: serverVerMethod,
+				},
+				zcapld.WithParent(serverZCAP.ID),
+				zcapld.WithInvoker(clientVerMethod),
+				zcapld.WithCapabilityChain(serverZCAP.ID),
+				zcapld.WithAllowedActions("read", "write"), // attenuated
+				zcapld.WithInvocationTarget(resource, "urn:edv:document"),
+			)
+			require.NoError(t, err)
+
+			thirdParty := newAgent(t)
+			thirdPartySigner := thirdParty.signer()
+			thirdPartyVerMethod := didKeyURL(thirdPartySigner)
+
+			// the client then creates a zcap for a third party
+			// notice this zcap is further attenuated - it can only "read"
+			thirdPartyZCAP, err := zcapld.NewCapability(
+				&zcapld.Signer{
+					SignatureSuite:     ed25519signature2018.New(suite.WithSigner(clientSigner)),
+					SuiteType:          ed25519signature2018.SignatureType,
+					VerificationMethod: clientVerMethod,
+				},
+				zcapld.WithParent(clientZCAP.ID),
+				zcapld.WithInvoker(thirdPartyVerMethod),
+				zcapld.WithCapabilityChain(serverZCAP.ID, clientZCAP.ID),
+				zcapld.WithAllowedActions("read"),
+				zcapld.WithInvocationTarget(resource, "urn:edv:document"),
+			)
+			require.NoError(t, err)
+
+			// third party makes an authenticated request w/zcap to perform a "read" action on the resource
+			thirdPartyRequest := httptest.NewRequest(http.MethodGet, resource, nil)
+			thirdPartyRequest.Header.Set(
+				zcapld.CapabilityInvocationHTTPHeader,
+				fmt.Sprintf(`zcap capability="%s",action="%s"`, compressZCAP(t, thirdPartyZCAP), "read"),
+			)
+
+			hs := httpsignatures.NewHTTPSignatures(&zcapld.AriesDIDKeySecrets{})
+			hs.SetSignatureHashAlgorithm(&zcapld.AriesDIDKeySignatureHashAlgorithm{
+				Crypto: thirdParty.Crypto(),
+				KMS:    thirdParty.KMS(),
+			})
+			err = hs.Sign(thirdPartyVerMethod, thirdPartyRequest)
+			require.NoError(t, err)
+
+			// server's middleware authenticates this request
+			zcapld.NewHTTPSigAuthHandler(
+				&zcapld.HTTPSigAuthConfig{
+					CapabilityResolver: zcapld.SimpleCapabilityResolver{
+						serverZCAP.ID: serverZCAP,
+						clientZCAP.ID: clientZCAP,
+					},
+					KeyResolver: &zcapld.DIDKeyResolver{},
+					VerifierOptions: []zcapld.VerificationOption{
+						zcapld.WithSignatureSuites(
+							ed25519signature2018.New(suite.WithVerifier(ed25519signature2018.NewPublicKeyVerifier())),
+						),
+						zcapld.WithLDDocumentLoaders(testLDDocumentLoader),
+					},
+					Secrets:     &zcapld.AriesDIDKeySecrets{},
+					ErrConsumer: logger,
+					KMS:         server.KMS(),
+					Crypto:      server.Crypto(),
+				},
+				&zcapld.InvocationExpectations{
+					Target:         resource,
+					RootCapability: serverZCAP.ID,
+					Action:         "read",
+				},
+				next,
+			).ServeHTTP(httptest.NewRecorder(), thirdPartyRequest)
+			require.NoError(t, logErr)
+			require.True(t, executed)
+		})
+
+		t.Run("2-level: rejects request with invalid attenuation on the 1st delegated zcap", func(t *testing.T) {
+			var logErr error
+			executed := false
+			next := func(w http.ResponseWriter, r *http.Request) {
+				executed = true
+			}
+			logger := func(e error) {
+				logErr = e
+			}
+			// server creates a resource and a ZCAP for its own resource
+			resource := fmt.Sprintf("http://www.example.org/foo/documents/%s", uuid.New().String())
+			server := newAgent(t)
+			serverSigner := server.signer()
+			serverVerMethod := didKeyURL(serverSigner)
+			serverZCAP, err := zcapld.NewCapability(
+				&zcapld.Signer{
+					SignatureSuite:     ed25519signature2018.New(suite.WithSigner(serverSigner)),
+					SuiteType:          ed25519signature2018.SignatureType,
+					VerificationMethod: serverVerMethod,
+				},
+				zcapld.WithAllowedActions("read", "write", "archive"),
+				zcapld.WithInvocationTarget(resource, "urn:edv:document"),
+				zcapld.WithID(resource),
+			)
+			require.NoError(t, err)
+
+			client := newAgent(t)
+			clientSigner := client.signer()
+			clientVerMethod := didKeyURL(clientSigner)
+
+			// server creates a ZCAP for the client that owns this resource
+			// notice the allowed actions have been attenuated - the client cannot "archive" the resource
+			clientZCAP, err := zcapld.NewCapability(
+				&zcapld.Signer{
+					SignatureSuite:     ed25519signature2018.New(suite.WithSigner(serverSigner)),
+					SuiteType:          ed25519signature2018.SignatureType,
+					VerificationMethod: serverVerMethod,
+				},
+				zcapld.WithParent(serverZCAP.ID),
+				zcapld.WithInvoker(clientVerMethod),
+				zcapld.WithCapabilityChain(serverZCAP.ID),
+				zcapld.WithAllowedActions("read", "write", "fly"), // fly is not included in parent's allowed actions
+				zcapld.WithInvocationTarget(resource, "urn:edv:document"),
+			)
+			require.NoError(t, err)
+
+			thirdParty := newAgent(t)
+			thirdPartySigner := thirdParty.signer()
+			thirdPartyVerMethod := didKeyURL(thirdPartySigner)
+
+			// the client then creates a zcap for a third party
+			// notice this zcap is further attenuated - it can only "read"
+			thirdPartyZCAP, err := zcapld.NewCapability(
+				&zcapld.Signer{
+					SignatureSuite:     ed25519signature2018.New(suite.WithSigner(clientSigner)),
+					SuiteType:          ed25519signature2018.SignatureType,
+					VerificationMethod: clientVerMethod,
+				},
+				zcapld.WithParent(clientZCAP.ID),
+				zcapld.WithInvoker(thirdPartyVerMethod),
+				zcapld.WithCapabilityChain(serverZCAP.ID, clientZCAP.ID),
+				zcapld.WithAllowedActions("read"),
+				zcapld.WithInvocationTarget(resource, "urn:edv:document"),
+			)
+			require.NoError(t, err)
+
+			// third party makes an authenticated request w/zcap to perform a "read" action on the resource
+			thirdPartyRequest := httptest.NewRequest(http.MethodGet, resource, nil)
+			thirdPartyRequest.Header.Set(
+				zcapld.CapabilityInvocationHTTPHeader,
+				fmt.Sprintf(`zcap capability="%s",action="%s"`, compressZCAP(t, thirdPartyZCAP), "read"),
+			)
+
+			hs := httpsignatures.NewHTTPSignatures(&zcapld.AriesDIDKeySecrets{})
+			hs.SetSignatureHashAlgorithm(&zcapld.AriesDIDKeySignatureHashAlgorithm{
+				Crypto: thirdParty.Crypto(),
+				KMS:    thirdParty.KMS(),
+			})
+			err = hs.Sign(thirdPartyVerMethod, thirdPartyRequest)
+			require.NoError(t, err)
+
+			// server's middleware authenticates this request
+			zcapld.NewHTTPSigAuthHandler(
+				&zcapld.HTTPSigAuthConfig{
+					CapabilityResolver: zcapld.SimpleCapabilityResolver{
+						serverZCAP.ID: serverZCAP,
+						clientZCAP.ID: clientZCAP,
+					},
+					KeyResolver: &zcapld.DIDKeyResolver{},
+					VerifierOptions: []zcapld.VerificationOption{
+						zcapld.WithSignatureSuites(
+							ed25519signature2018.New(suite.WithVerifier(ed25519signature2018.NewPublicKeyVerifier())),
+						),
+						zcapld.WithLDDocumentLoaders(testLDDocumentLoader),
+					},
+					Secrets:     &zcapld.AriesDIDKeySecrets{},
+					ErrConsumer: logger,
+					KMS:         server.KMS(),
+					Crypto:      server.Crypto(),
+				},
+				&zcapld.InvocationExpectations{
+					Target:         resource,
+					RootCapability: serverZCAP.ID,
+					Action:         "read",
+				},
+				next,
+			).ServeHTTP(httptest.NewRecorder(), thirdPartyRequest)
+			require.Error(t, logErr)
+			require.Contains(t, logErr.Error(), "failed to verify attenuation of zcap")
+			require.False(t, executed)
+		})
+
+		t.Run("2-level: rejects request with invalid attenuation on leaf zcap", func(t *testing.T) {
+			var logErr error
+			executed := false
+			next := func(w http.ResponseWriter, r *http.Request) {
+				executed = true
+			}
+			logger := func(e error) {
+				logErr = e
+			}
+			// server creates a resource and a ZCAP for its own resource
+			resource := fmt.Sprintf("http://www.example.org/foo/documents/%s", uuid.New().String())
+			server := newAgent(t)
+			serverSigner := server.signer()
+			serverVerMethod := didKeyURL(serverSigner)
+			serverZCAP, err := zcapld.NewCapability(
+				&zcapld.Signer{
+					SignatureSuite:     ed25519signature2018.New(suite.WithSigner(serverSigner)),
+					SuiteType:          ed25519signature2018.SignatureType,
+					VerificationMethod: serverVerMethod,
+				},
+				zcapld.WithAllowedActions("read", "write", "archive"),
+				zcapld.WithInvocationTarget(resource, "urn:edv:document"),
+				zcapld.WithID(resource),
+			)
+			require.NoError(t, err)
+
+			client := newAgent(t)
+			clientSigner := client.signer()
+			clientVerMethod := didKeyURL(clientSigner)
+
+			// server creates a ZCAP for the client that owns this resource
+			// notice the allowed actions have been attenuated - the client cannot "archive" the resource
+			clientZCAP, err := zcapld.NewCapability(
+				&zcapld.Signer{
+					SignatureSuite:     ed25519signature2018.New(suite.WithSigner(serverSigner)),
+					SuiteType:          ed25519signature2018.SignatureType,
+					VerificationMethod: serverVerMethod,
+				},
+				zcapld.WithParent(serverZCAP.ID),
+				zcapld.WithInvoker(clientVerMethod),
+				zcapld.WithCapabilityChain(serverZCAP.ID),
+				zcapld.WithAllowedActions("read", "write"), // attenuated
+				zcapld.WithInvocationTarget(resource, "urn:edv:document"),
+			)
+			require.NoError(t, err)
+
+			thirdParty := newAgent(t)
+			thirdPartySigner := thirdParty.signer()
+			thirdPartyVerMethod := didKeyURL(thirdPartySigner)
+
+			// the client then creates a zcap for a third party
+			// notice this zcap is further attenuated - it can only "read"
+			thirdPartyZCAP, err := zcapld.NewCapability(
+				&zcapld.Signer{
+					SignatureSuite:     ed25519signature2018.New(suite.WithSigner(clientSigner)),
+					SuiteType:          ed25519signature2018.SignatureType,
+					VerificationMethod: clientVerMethod,
+				},
+				zcapld.WithParent(clientZCAP.ID),
+				zcapld.WithInvoker(thirdPartyVerMethod),
+				zcapld.WithCapabilityChain(serverZCAP.ID, clientZCAP.ID),
+				zcapld.WithAllowedActions("read", "archive"), // archive not included in parent capability
+				zcapld.WithInvocationTarget(resource, "urn:edv:document"),
+			)
+			require.NoError(t, err)
+
+			// third party makes an authenticated request w/zcap to perform a "read" action on the resource
+			thirdPartyRequest := httptest.NewRequest(http.MethodGet, resource, nil)
+			thirdPartyRequest.Header.Set(
+				zcapld.CapabilityInvocationHTTPHeader,
+				fmt.Sprintf(`zcap capability="%s",action="%s"`, compressZCAP(t, thirdPartyZCAP), "read"),
+			)
+
+			hs := httpsignatures.NewHTTPSignatures(&zcapld.AriesDIDKeySecrets{})
+			hs.SetSignatureHashAlgorithm(&zcapld.AriesDIDKeySignatureHashAlgorithm{
+				Crypto: thirdParty.Crypto(),
+				KMS:    thirdParty.KMS(),
+			})
+			err = hs.Sign(thirdPartyVerMethod, thirdPartyRequest)
+			require.NoError(t, err)
+
+			// server's middleware authenticates this request
+			zcapld.NewHTTPSigAuthHandler(
+				&zcapld.HTTPSigAuthConfig{
+					CapabilityResolver: zcapld.SimpleCapabilityResolver{
+						serverZCAP.ID: serverZCAP,
+						clientZCAP.ID: clientZCAP,
+					},
+					KeyResolver: &zcapld.DIDKeyResolver{},
+					VerifierOptions: []zcapld.VerificationOption{
+						zcapld.WithSignatureSuites(
+							ed25519signature2018.New(suite.WithVerifier(ed25519signature2018.NewPublicKeyVerifier())),
+						),
+						zcapld.WithLDDocumentLoaders(testLDDocumentLoader),
+					},
+					Secrets:     &zcapld.AriesDIDKeySecrets{},
+					ErrConsumer: logger,
+					KMS:         server.KMS(),
+					Crypto:      server.Crypto(),
+				},
+				&zcapld.InvocationExpectations{
+					Target:         resource,
+					RootCapability: serverZCAP.ID,
+					Action:         "read",
+				},
+				next,
+			).ServeHTTP(httptest.NewRecorder(), thirdPartyRequest)
+			require.Error(t, logErr)
+			require.Contains(t, logErr.Error(), "failed to verify attenuation of zcap")
+			require.False(t, executed)
+		})
+
+		// TODO the implementation supports delegation chains of arbitrary length, but requires all but the last
+		//  zcap to be resolvable. Therefore, this implementation is a poor fit for use cases where there is no
+		//  central registry of zcaps and needs to be improved such that the server does not require pre-loading
+		//  all those descendent zcaps in order to verify the chain.
+		t.Run("4-level: authorizes valid request", func(t *testing.T) {
+			var logErr error
+			executed := false
+			next := func(w http.ResponseWriter, r *http.Request) {
+				executed = true
+			}
+			logger := func(e error) {
+				logErr = e
+			}
+			resource := fmt.Sprintf("http://www.example.org/foo/documents/%s", uuid.New().String())
+			server := newAgent(t)
+			serverSigner := server.signer()
+			serverVerMethod := didKeyURL(serverSigner)
+			serverZCAP, err := zcapld.NewCapability(
+				&zcapld.Signer{
+					SignatureSuite:     ed25519signature2018.New(suite.WithSigner(serverSigner)),
+					SuiteType:          ed25519signature2018.SignatureType,
+					VerificationMethod: serverVerMethod,
+				},
+				zcapld.WithAllowedActions("create", "read", "write", "delete", "archive"),
+				zcapld.WithInvocationTarget(resource, "urn:edv:document"),
+				zcapld.WithID(resource),
+			)
+			require.NoError(t, err)
+
+			client := newAgent(t)
+			clientSigner := client.signer()
+			clientVerMethod := didKeyURL(clientSigner)
+
+			clientZCAP, err := zcapld.NewCapability(
+				&zcapld.Signer{
+					SignatureSuite:     ed25519signature2018.New(suite.WithSigner(serverSigner)),
+					SuiteType:          ed25519signature2018.SignatureType,
+					VerificationMethod: serverVerMethod,
+				},
+				zcapld.WithParent(serverZCAP.ID),
+				zcapld.WithInvoker(clientVerMethod),
+				zcapld.WithCapabilityChain(serverZCAP.ID),
+				zcapld.WithAllowedActions("create", "read", "write", "delete"), // attenuated
+				zcapld.WithInvocationTarget(resource, "urn:edv:document"),
+			)
+			require.NoError(t, err)
+
+			thirdParty := newAgent(t)
+			thirdPartySigner := thirdParty.signer()
+			thirdPartyVerMethod := didKeyURL(thirdPartySigner)
+
+			thirdPartyZCAP, err := zcapld.NewCapability(
+				&zcapld.Signer{
+					SignatureSuite:     ed25519signature2018.New(suite.WithSigner(clientSigner)),
+					SuiteType:          ed25519signature2018.SignatureType,
+					VerificationMethod: clientVerMethod,
+				},
+				zcapld.WithParent(clientZCAP.ID),
+				zcapld.WithInvoker(thirdPartyVerMethod),
+				zcapld.WithCapabilityChain(serverZCAP.ID, clientZCAP.ID),
+				zcapld.WithAllowedActions("read", "write", "delete"),
+				zcapld.WithInvocationTarget(resource, "urn:edv:document"),
+			)
+			require.NoError(t, err)
+
+			fourthParty := newAgent(t)
+			fourthPartySigner := fourthParty.signer()
+			fourthPartyVerMethod := didKeyURL(fourthPartySigner)
+
+			fourthPartyZCAP, err := zcapld.NewCapability(
+				&zcapld.Signer{
+					SignatureSuite:     ed25519signature2018.New(suite.WithSigner(thirdPartySigner)),
+					SuiteType:          ed25519signature2018.SignatureType,
+					VerificationMethod: thirdPartyVerMethod,
+				},
+				zcapld.WithParent(thirdPartyZCAP.ID),
+				zcapld.WithInvoker(fourthPartyVerMethod),
+				zcapld.WithCapabilityChain(serverZCAP.ID, clientZCAP.ID, thirdPartyZCAP.ID),
+				zcapld.WithAllowedActions("read", "write"),
+				zcapld.WithInvocationTarget(resource, "urn:edv:document"),
+			)
+			require.NoError(t, err)
+
+			fifthParty := newAgent(t)
+			fifthPartySigner := fifthParty.signer()
+			fifthPartyVerMethod := didKeyURL(fifthPartySigner)
+
+			fifthPartyZCAP, err := zcapld.NewCapability(
+				&zcapld.Signer{
+					SignatureSuite:     ed25519signature2018.New(suite.WithSigner(fourthPartySigner)),
+					SuiteType:          ed25519signature2018.SignatureType,
+					VerificationMethod: fourthPartyVerMethod,
+				},
+				zcapld.WithParent(fourthPartyZCAP.ID),
+				zcapld.WithInvoker(fifthPartyVerMethod),
+				zcapld.WithCapabilityChain(serverZCAP.ID, clientZCAP.ID, thirdPartyZCAP.ID, fourthPartyZCAP.ID),
+				zcapld.WithAllowedActions("read"),
+				zcapld.WithInvocationTarget(resource, "urn:edv:document"),
+			)
+			require.NoError(t, err)
+
+			// fifth party makes an authenticated request w/zcap to perform a "read" action on the resource
+			fifthPartyRequest := httptest.NewRequest(http.MethodGet, resource, nil)
+			fifthPartyRequest.Header.Set(
+				zcapld.CapabilityInvocationHTTPHeader,
+				fmt.Sprintf(`zcap capability="%s",action="%s"`, compressZCAP(t, fifthPartyZCAP), "read"),
+			)
+
+			hs := httpsignatures.NewHTTPSignatures(&zcapld.AriesDIDKeySecrets{})
+			hs.SetSignatureHashAlgorithm(&zcapld.AriesDIDKeySignatureHashAlgorithm{
+				Crypto: fifthParty.Crypto(),
+				KMS:    fifthParty.KMS(),
+			})
+			err = hs.Sign(fifthPartyVerMethod, fifthPartyRequest)
+			require.NoError(t, err)
+
+			// server's middleware authenticates this request
+			zcapld.NewHTTPSigAuthHandler(
+				&zcapld.HTTPSigAuthConfig{
+					CapabilityResolver: zcapld.SimpleCapabilityResolver{
+						serverZCAP.ID:      serverZCAP,
+						clientZCAP.ID:      clientZCAP,
+						thirdPartyZCAP.ID:  thirdPartyZCAP,
+						fourthPartyZCAP.ID: fourthPartyZCAP,
+					},
+					KeyResolver: &zcapld.DIDKeyResolver{},
+					VerifierOptions: []zcapld.VerificationOption{
+						zcapld.WithSignatureSuites(
+							ed25519signature2018.New(suite.WithVerifier(ed25519signature2018.NewPublicKeyVerifier())),
+						),
+						zcapld.WithLDDocumentLoaders(testLDDocumentLoader),
+					},
+					Secrets:     &zcapld.AriesDIDKeySecrets{},
+					ErrConsumer: logger,
+					KMS:         server.KMS(),
+					Crypto:      server.Crypto(),
+				},
+				&zcapld.InvocationExpectations{
+					Target:         resource,
+					RootCapability: serverZCAP.ID,
+					Action:         "read",
+				},
+				next,
+			).ServeHTTP(httptest.NewRecorder(), fifthPartyRequest)
+			require.NoError(t, logErr)
+			require.True(t, executed)
+		})
+	})
 }
 
 func TestAriesDIDKeySignatureHashAlgorithm_Create(t *testing.T) {

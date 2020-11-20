@@ -213,9 +213,9 @@ func (v *Verifier) verifyCapabilityChain(
 		return nil
 	}
 
-	// TODO add support. First figure out why capabilityChain is an array.
-	if len(capabilityChain) > 0 {
-		return errors.New("multiple capabilityChains not supported yet")
+	err = v.verifyCapabilityChainAttenuation(root, capability, capabilityChain)
+	if err != nil {
+		return fmt.Errorf("failed to verify capabilityChain attenuation: %w", err)
 	}
 
 	return nil
@@ -230,6 +230,58 @@ func (v *Verifier) verifyProof(capability *Capability) error {
 	err = v.verifier.Verify(bits, v.ldProcOpts...)
 	if err != nil {
 		return fmt.Errorf("document verifier error: %w", err)
+	}
+
+	return nil
+}
+
+func (v *Verifier) verifyCapabilityChainAttenuation(
+	start *Capability, end *Capability, intermediates []interface{}) error {
+	// verify proofs and attenuation
+	// traverse in order from start to end
+	prev := start
+
+	for i := range intermediates {
+		id := fmt.Sprintf("%s", intermediates[i])
+
+		next, err := v.zcaps.Resolve(id)
+		if err != nil {
+			return fmt.Errorf("failed to resolve capability %s: %w", id, err)
+		}
+
+		err = v.verifyProof(next)
+		if err != nil {
+			return fmt.Errorf("failed to verify proof on capability %s: %w", id, err)
+		}
+
+		err = verifyAttenuation(prev, next)
+		if err != nil {
+			return fmt.Errorf(
+				"failed to verify attenuation of zcap %s against parent %s: %w",
+				prev.ID, next.ID, err,
+			)
+		}
+
+		prev = next
+	}
+
+	// finally, verify the end capability's attenuation versus its immediate parent
+	err := verifyAttenuation(prev, end)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to verify attenuation of zcap %s against parent %s: %w",
+			prev.ID, end.ID, err,
+		)
+	}
+
+	return nil
+}
+
+func verifyAttenuation(parent, child *Capability) error {
+	for i := range child.AllowedAction {
+		if !stringsContain(parent.AllowedAction, child.AllowedAction[i]) {
+			return fmt.Errorf("action '%s' not allowed by parent", child.AllowedAction[i])
+		}
 	}
 
 	return nil
