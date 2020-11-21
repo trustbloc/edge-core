@@ -379,6 +379,11 @@ func (i *sqlDBResultsIterator) Release() error {
 	return nil
 }
 
+// TODO (#51): Refactor querying to work more generically while supporting pagination.
+func (i *sqlDBResultsIterator) Bookmark() string {
+	return ""
+}
+
 func (s *sqlDBStore) getIndexes() ([]string, error) {
 	getIndexStmt := "SELECT DISTINCT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_NAME= ?"
 

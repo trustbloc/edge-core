@@ -24,21 +24,24 @@ import (
 )
 
 const (
-	couchDBURL                 = "admin:password@localhost:5984"
-	couchDBURLNotReady         = "localhost:5900"
-	numRetries                 = 30
-	testStoreName              = "teststore"
-	testDocKey                 = "sampleDBKey"
-	testDocKey2                = "sampleDBKey2"
-	testJSONValue              = `{"JSONKey":"JSONValue"}`
-	testJSONValue1             = `{"JSONKey1":"JSONValue1"}`
-	testJSONValue2             = `{"JSONKey2":"JSONValue2"}`
-	testJSONWithMultipleFields = `{"employeeID":1234,"name":"Mr. Trustbloc"}`
-	testNonJSONValue           = "1"
-	testNonJSONValue1          = "2"
-	testIndexName              = "TestIndex"
-	testDesignDoc              = "TestDesignDoc"
-	testDBPrefix               = "dbprefix"
+	couchDBURL                  = "admin:password@localhost:5984"
+	couchDBURLNotReady          = "localhost:5900"
+	numRetries                  = 30
+	testStoreName               = "teststore"
+	testDocKey                  = "sampleDBKey"
+	testDocKey2                 = "sampleDBKey2"
+	testDocKey3                 = "sampleDBKey3"
+	testJSONValue               = `{"JSONKey":"JSONValue"}`
+	testJSONValue1              = `{"JSONKey1":"JSONValue1"}`
+	testJSONValue2              = `{"JSONKey2":"JSONValue2"}`
+	testJSONWithMultipleFields  = `{"employeeID":1234,"name":"Mr. Trustbloc"}`
+	testJSONWithMultipleFields2 = `{"employeeID":1234,"name":"Mr. Bloctrust"}`
+	testJSONWithMultipleFields3 = `{"employeeID":1234,"name":"Mr. Trustcolb"}`
+	testNonJSONValue            = "1"
+	testNonJSONValue1           = "2"
+	testIndexName               = "TestIndex"
+	testDesignDoc               = "TestDesignDoc"
+	testDBPrefix                = "dbprefix"
 )
 
 // nolint:gochecknoglobals // test globals
@@ -500,7 +503,7 @@ func TestCouchDBStore_CreateIndex(t *testing.T) {
 }
 
 func TestCouchDBStore_Query(t *testing.T) {
-	t.Run("Successfully query using index", func(t *testing.T) {
+	t.Run("Successfully query using index - no paging necessary", func(t *testing.T) {
 		provider := initializeTest(t)
 		store := createAndOpenTestStore(t, provider)
 
@@ -510,6 +513,7 @@ func TestCouchDBStore_Query(t *testing.T) {
 		err = createIndex(store, `{"fields": ["employeeID"]}`)
 		require.NoError(t, err)
 
+		// If no limit is specified in the query, then CouchDB uses a default of 25.
 		itr, err := store.Query(`{
 		   "selector": {
 		       "employeeID": 1234
@@ -525,6 +529,84 @@ func TestCouchDBStore_Query(t *testing.T) {
 		value, err := itr.Value()
 		require.NoError(t, err)
 		require.Equal(t, testJSONWithMultipleFields, string(value))
+
+		ok, err = itr.Next()
+		require.NoError(t, err)
+		require.False(t, ok)
+
+		err = itr.Release()
+		require.NoError(t, err)
+	})
+	t.Run("Successfully query using index - use bookmark for paging to get all documents", func(t *testing.T) {
+		provider := initializeTest(t)
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey, []byte(testJSONWithMultipleFields))
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey2, []byte(testJSONWithMultipleFields2))
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey3, []byte(testJSONWithMultipleFields3))
+		require.NoError(t, err)
+
+		err = createIndex(store, `{"fields": ["employeeID"]}`)
+		require.NoError(t, err)
+
+		itr, err := store.Query(`{
+		   "selector": {
+		       "employeeID": 1234
+		   },
+			"use_index": ["` + testDesignDoc + `", "` + testIndexName + `"],
+			"limit": 2
+		}`)
+		require.NoError(t, err)
+
+		ok, err := itr.Next()
+		require.NoError(t, err)
+		require.True(t, ok)
+
+		value, err := itr.Value()
+		require.NoError(t, err)
+		require.Equal(t, testJSONWithMultipleFields, string(value))
+
+		ok, err = itr.Next()
+		require.NoError(t, err)
+		require.True(t, ok)
+
+		value, err = itr.Value()
+		require.NoError(t, err)
+		require.Equal(t, testJSONWithMultipleFields2, string(value))
+
+		ok, err = itr.Next()
+		require.NoError(t, err)
+		require.False(t, ok)
+
+		bookmark := itr.Bookmark()
+		require.NotEmpty(t, bookmark)
+
+		err = itr.Release()
+		require.NoError(t, err)
+
+		// Do another query using the bookmark to get the remaining result.
+
+		itr, err = store.Query(`{
+		   "selector": {
+		       "employeeID": 1234
+		   },
+			"use_index": ["` + testDesignDoc + `", "` + testIndexName + `"],
+			"limit": 2,
+			"bookmark": "` + bookmark + `"
+		}`)
+		require.NoError(t, err)
+
+		ok, err = itr.Next()
+		require.NoError(t, err)
+		require.True(t, ok)
+
+		value, err = itr.Value()
+		require.NoError(t, err)
+		require.Equal(t, testJSONWithMultipleFields3, string(value))
 
 		ok, err = itr.Next()
 		require.NoError(t, err)

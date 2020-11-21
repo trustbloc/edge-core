@@ -371,6 +371,11 @@ func TestSQLDBStore(t *testing.T) {
 		require.Nil(t, res)
 		require.EqualError(t, err, "failure while scanning rows: sql: Scan called without calling Next")
 	})
+	t.Run("Test result iterator bookmark", func(t *testing.T) {
+		rows := sql.Rows{}
+		resItr := sqlDBResultsIterator{&rows, result{}, nil}
+		require.Empty(t, resItr.Bookmark())
+	})
 	t.Run("Test GetAll", func(t *testing.T) {
 		store := &sqlDBStore{}
 
