@@ -17,7 +17,7 @@ require (
 	github.com/google/uuid v1.1.2
 	github.com/gopherjs/gopherjs v0.0.0-20200217142428-fce0ec30dd00 // indirect
 	github.com/hashicorp/vault v1.2.1-0.20200911125421-dba37adcb55a
-	github.com/hyperledger/aries-framework-go v0.1.5-0.20201110161050-249e1c428734
+	github.com/hyperledger/aries-framework-go v0.1.5-0.20201120141223-c70cf578d36b
 	github.com/igor-pavlenko/httpsignatures-go v0.0.21
 	github.com/piprate/json-gold v0.3.0
 	github.com/spf13/cobra v0.0.6
