@@ -22,6 +22,9 @@ var ErrIndexingNotSupported = errors.New("indexing is not supported")
 // ErrQueryingNotSupported  is used when querying is not supported by the store implementation.
 var ErrQueryingNotSupported = errors.New("querying is not supported")
 
+// ErrBookmarksNotSupported is used when bookmarks are not supported by the store implementation.
+var ErrBookmarksNotSupported = errors.New("bookmarks are not supported")
+
 // ErrGetAllNotSupported is used when the get all function is not supported by the store implementation.
 var ErrGetAllNotSupported = errors.New("getting all key-value pairs is not supported")
 

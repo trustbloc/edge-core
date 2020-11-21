@@ -50,6 +50,7 @@ type Store interface {
 
 	// Query queries the store for data based on the provided query string, the format of
 	// which will be dependent on what the underlying store requires.
+	// TODO (#51): Refactor querying to work more generically while supporting pagination.
 	Query(query string) (ResultsIterator, error)
 
 	// Delete deletes the key-value pair associated with k.
@@ -70,4 +71,8 @@ type ResultsIterator interface {
 
 	// Value returns the value of the current key-value pair.
 	Value() ([]byte, error)
+
+	// Bookmark returns a value that's used for pagination.
+	// TODO (#51): Refactor querying to work more generically while supporting pagination.
+	Bookmark() string
 }

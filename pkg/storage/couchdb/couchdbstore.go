@@ -394,6 +394,17 @@ func (i *couchDBResultsIterator) Value() ([]byte, error) {
 	return value, nil
 }
 
+// Bookmark returns the bookmark value returned by the CouchDB query, if there is one.
+// Use this bookmark to query CouchDB again for the rest of your documents.
+// Kivik only sets this value after all result rows have been enumerated through by Next.
+// Note that the CouchDB documentation says that the presence of a bookmark doesn't guarantee
+// that there are more results. To determine this, instead you should compare the number of results returned
+// with the page size requested. If the number of results returned is less than the page size, then there are no more.
+// See https://docs.couchdb.org/en/stable/api/database/find.html#pagination for more information.
+func (i *couchDBResultsIterator) Bookmark() string {
+	return i.resultRows.Bookmark()
+}
+
 func (c *CouchDBStore) getAllKeyValuePairs(rows *kivik.Rows) (map[string][]byte, error) {
 	allKeyValuePairs := make(map[string][]byte)
 
