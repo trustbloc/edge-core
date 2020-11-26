@@ -140,6 +140,7 @@ func authZHandleFunc(w http.ResponseWriter, r *http.Request,
 	err := hs.Verify(r)
 	if err != nil {
 		maybeConsumeError(config.ErrConsumer, fmt.Errorf("failed to verify http signature: %w", err))
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 
 		return
 	}
@@ -147,6 +148,7 @@ func authZHandleFunc(w http.ResponseWriter, r *http.Request,
 	zcap, keyID, action, err := parseProofParams(r)
 	if err != nil {
 		maybeConsumeError(config.ErrConsumer, fmt.Errorf("failed to parse proof params: %w", err))
+		http.Error(w, "bad request", http.StatusBadRequest)
 
 		return
 	}
@@ -154,6 +156,7 @@ func authZHandleFunc(w http.ResponseWriter, r *http.Request,
 	verifier, err := NewVerifier(config.CapabilityResolver, config.KeyResolver, config.VerifierOptions...)
 	if err != nil {
 		maybeConsumeError(config.ErrConsumer, fmt.Errorf("middleware failed to init verifier: %w", err))
+		http.Error(w, fmt.Sprintf("failed to init zcap verifier: %s", err.Error()), http.StatusInternalServerError)
 
 		return
 	}
@@ -176,6 +179,7 @@ func authZHandleFunc(w http.ResponseWriter, r *http.Request,
 	)
 	if err != nil {
 		maybeConsumeError(config.ErrConsumer, fmt.Errorf("failed to verify zcap: %w", err))
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 
 		return
 	}
