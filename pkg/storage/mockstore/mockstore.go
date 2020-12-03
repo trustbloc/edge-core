@@ -77,9 +77,25 @@ func (s *MockStore) Put(k string, v []byte) error {
 	return s.ErrPut
 }
 
-// GetAll fetches all the key-value pairs within this store.
-func (s *MockStore) GetAll() (map[string][]byte, error) {
-	return s.Store, s.ErrGetAll
+// PutAll stores the key-value pairs in the order given in the array. The end result is equivalent to calling
+// Put(k,v) on each key-value pair individually in a loop.
+func (s *MockStore) PutAll(keys []string, values [][]byte) error {
+	if len(keys) != len(values) {
+		return storage.ErrKeysAndValuesDifferentLengths
+	}
+
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	for i := 0; i < len(keys); i++ {
+		if keys[i] == "" {
+			return storage.ErrKeyRequired
+		}
+
+		s.Store[keys[i]] = values[i]
+	}
+
+	return nil
 }
 
 // Get fetches the value associated with the given key.
@@ -93,6 +109,11 @@ func (s *MockStore) Get(k string) ([]byte, error) {
 	}
 
 	return val, s.ErrGet
+}
+
+// GetAll fetches all the key-value pairs within this store.
+func (s *MockStore) GetAll() (map[string][]byte, error) {
+	return s.Store, s.ErrGetAll
 }
 
 // CreateIndex returns a mocked error.

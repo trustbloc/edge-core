@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/go-kivik/kivik"
+	"github.com/go-kivik/kivik/v3"
 	"github.com/stretchr/testify/require"
 
 	"github.com/trustbloc/edge-core/pkg/log"
@@ -28,17 +28,42 @@ const (
 	couchDBURLNotReady          = "localhost:5900"
 	numRetries                  = 30
 	testStoreName               = "teststore"
-	testDocKey                  = "sampleDBKey"
+	testDocKey1                 = "sampleDBKey1"
 	testDocKey2                 = "sampleDBKey2"
 	testDocKey3                 = "sampleDBKey3"
-	testJSONValue               = `{"JSONKey":"JSONValue"}`
+	testDocKey4                 = "sampleDBKey4"
+	testDocKey5                 = "sampleDBKey5"
+	testDocKey6                 = "sampleDBKey6"
+	testDocKey7                 = "sampleDBKey7"
+	testDocKey8                 = "sampleDBKey8"
+	testDocKey9                 = "sampleDBKey9"
+	testDocKey10                = "sampleDBKey10"
+	testDocKey11                = "sampleDBKey11"
 	testJSONValue1              = `{"JSONKey1":"JSONValue1"}`
 	testJSONValue2              = `{"JSONKey2":"JSONValue2"}`
+	testJSONValue3              = `{"JSONKey3":"JSONValue3"}`
+	testJSONValue4              = `{"JSONKey4":"JSONValue4"}`
+	testJSONValue5              = `{"JSONKey5":"JSONValue5"}`
+	testJSONValue6              = `{"JSONKey6":"JSONValue6"}`
+	testJSONValue7              = `{"JSONKey7":"JSONValue7"}`
+	testJSONValue8              = `{"JSONKey8":"JSONValue8"}`
+	testJSONValue9              = `{"JSONKey9":"JSONValue9"}`
+	testJSONValue10             = `{"JSONKey10":"JSONValue10"}`
+	testJSONValue11             = `{"JSONKey11":"JSONValue11"}`
 	testJSONWithMultipleFields  = `{"employeeID":1234,"name":"Mr. Trustbloc"}`
 	testJSONWithMultipleFields2 = `{"employeeID":1234,"name":"Mr. Bloctrust"}`
 	testJSONWithMultipleFields3 = `{"employeeID":1234,"name":"Mr. Trustcolb"}`
-	testNonJSONValue            = "1"
-	testNonJSONValue1           = "2"
+	testNonJSONValue1           = "1"
+	testNonJSONValue2           = "2"
+	testNonJSONValue3           = "3"
+	testNonJSONValue4           = "4"
+	testNonJSONValue5           = "5"
+	testNonJSONValue6           = "6"
+	testNonJSONValue7           = "7"
+	testNonJSONValue8           = "8"
+	testNonJSONValue9           = "9"
+	testNonJSONValue10          = "10"
+	testNonJSONValue11          = "11"
 	testIndexName               = "TestIndex"
 	testDesignDoc               = "TestDesignDoc"
 	testDBPrefix                = "dbprefix"
@@ -239,7 +264,7 @@ func TestCouchDBStore_Put(t *testing.T) {
 
 		store := createAndOpenTestStore(t, provider)
 
-		err := store.Put(testDocKey, []byte(testJSONValue1))
+		err := store.Put(testDocKey1, []byte(testJSONValue2))
 		require.NoError(t, err)
 	})
 	t.Run("Success: value is not JSON", func(t *testing.T) {
@@ -247,7 +272,7 @@ func TestCouchDBStore_Put(t *testing.T) {
 
 		store := createAndOpenTestStore(t, provider)
 
-		err := store.Put(testDocKey, []byte(testNonJSONValue))
+		err := store.Put(testDocKey1, []byte(testNonJSONValue1))
 		require.NoError(t, err)
 	})
 	t.Run("Success: put after delete", func(t *testing.T) {
@@ -255,13 +280,13 @@ func TestCouchDBStore_Put(t *testing.T) {
 
 		store := createAndOpenTestStore(t, provider)
 
-		err := store.Put(testDocKey, []byte(testJSONValue1))
+		err := store.Put(testDocKey1, []byte(testJSONValue2))
 		require.NoError(t, err)
 
-		err = store.Delete(testDocKey)
+		err = store.Delete(testDocKey1)
 		require.NoError(t, err)
 
-		err = store.Put(testDocKey, []byte(testJSONValue1))
+		err = store.Put(testDocKey1, []byte(testJSONValue2))
 		require.NoError(t, err)
 	})
 	t.Run("Error while getting rev ID - database does not exist", func(t *testing.T) {
@@ -271,7 +296,7 @@ func TestCouchDBStore_Put(t *testing.T) {
 		err := provider.couchDBClient.DestroyDB(context.Background(), testStoreName)
 		require.NoError(t, err)
 
-		err = store.Put(testDocKey, []byte(testJSONValue1))
+		err = store.Put(testDocKey1, []byte(testJSONValue2))
 		require.NotNil(t, err)
 		require.Contains(t, err.Error(), "failure while getting rev ID")
 	})
@@ -280,7 +305,7 @@ func TestCouchDBStore_Put(t *testing.T) {
 
 		store := createAndOpenTestStore(t, provider)
 
-		err := store.Put(testDocKey, []byte(testJSONValue1))
+		err := store.Put(testDocKey1, []byte(testJSONValue2))
 		require.NoError(t, err)
 
 		couchDBStore, ok := store.(*CouchDBStore)
@@ -288,9 +313,512 @@ func TestCouchDBStore_Put(t *testing.T) {
 
 		couchDBStore.marshal = failingMarshal
 
-		err = store.Put(testDocKey, []byte(testJSONValue1))
+		err = store.Put(testDocKey1, []byte(testJSONValue2))
 		require.EqualError(t, err, "failure while adding rev ID: failure while unmarshalling put "+
 			"value with newly added rev ID: failingMarshal always fails")
+	})
+}
+
+func TestCouchDBStore_PutAll(t *testing.T) {
+	t.Run("Success: values are JSON, all new values", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		keys := []string{testDocKey1, testDocKey2, testDocKey3}
+		values := [][]byte{[]byte(testJSONValue1), []byte(testJSONValue2), []byte(testJSONValue3)}
+
+		err := store.PutAll(keys, values)
+		require.NoError(t, err)
+
+		value, err := store.Get(testDocKey1)
+		require.NoError(t, err)
+		require.Equal(t, testJSONValue1, string(value))
+
+		value, err = store.Get(testDocKey2)
+		require.NoError(t, err)
+		require.Equal(t, testJSONValue2, string(value))
+
+		value, err = store.Get(testDocKey3)
+		require.NoError(t, err)
+		require.Equal(t, testJSONValue3, string(value))
+	})
+	t.Run("Success: values are JSON, put new values then update all of them", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		keys := []string{testDocKey1, testDocKey2, testDocKey3}
+		values := [][]byte{[]byte(testJSONValue1), []byte(testJSONValue2), []byte(testJSONValue3)}
+
+		err := store.PutAll(keys, values)
+		require.NoError(t, err)
+
+		value, err := store.Get(testDocKey1)
+		require.NoError(t, err)
+		require.Equal(t, testJSONValue1, string(value))
+
+		value, err = store.Get(testDocKey2)
+		require.NoError(t, err)
+		require.Equal(t, testJSONValue2, string(value))
+
+		value, err = store.Get(testDocKey3)
+		require.NoError(t, err)
+		require.Equal(t, testJSONValue3, string(value))
+
+		err = store.PutAll(keys, values)
+		require.NoError(t, err)
+
+		value, err = store.Get(testDocKey1)
+		require.NoError(t, err)
+		require.Equal(t, testJSONValue1, string(value))
+
+		value, err = store.Get(testDocKey2)
+		require.NoError(t, err)
+		require.Equal(t, testJSONValue2, string(value))
+
+		value, err = store.Get(testDocKey3)
+		require.NoError(t, err)
+		require.Equal(t, testJSONValue3, string(value))
+	})
+	t.Run("Success: values are JSON, put value, then delete it, "+
+		"then put again using the deleted key and others, then delete that key and also another key "+
+		"from that bulk put, then put all again, then put all yet again",
+		func(t *testing.T) {
+			provider := initializeTest(t)
+
+			store := createAndOpenTestStore(t, provider)
+
+			err := store.Put(testDocKey1, []byte(testJSONValue2))
+			require.NoError(t, err)
+
+			value, err := store.Get(testDocKey1)
+			require.NoError(t, err)
+			require.Equal(t, testJSONValue2, string(value))
+
+			err = store.Delete(testDocKey1)
+			require.NoError(t, err)
+
+			value, err = store.Get(testDocKey1)
+			require.EqualError(t, err, "failure while getting raw CouchDB document: failure while scanning "+
+				"result rows doc: store does not have a value associated with this key")
+			require.Nil(t, value)
+
+			keys := []string{testDocKey1, testDocKey2, testDocKey3}
+			values := [][]byte{[]byte(testJSONValue1), []byte(testJSONValue2), []byte(testJSONValue3)}
+
+			err = store.PutAll(keys, values)
+			require.NoError(t, err)
+
+			value, err = store.Get(testDocKey1)
+			require.NoError(t, err)
+			require.Equal(t, testJSONValue1, string(value))
+
+			value, err = store.Get(testDocKey2)
+			require.NoError(t, err)
+			require.Equal(t, testJSONValue2, string(value))
+
+			value, err = store.Get(testDocKey3)
+			require.NoError(t, err)
+			require.Equal(t, testJSONValue3, string(value))
+
+			err = store.Delete(keys[0])
+			require.NoError(t, err)
+
+			value, err = store.Get(testDocKey1)
+			require.EqualError(t, err, "failure while getting raw CouchDB document: failure while scanning "+
+				"result rows doc: store does not have a value associated with this key")
+			require.Nil(t, value)
+
+			err = store.Delete(keys[2])
+			require.NoError(t, err)
+
+			value, err = store.Get(testDocKey3)
+			require.EqualError(t, err, "failure while getting raw CouchDB document: failure while scanning "+
+				"result rows doc: store does not have a value associated with this key")
+			require.Nil(t, value)
+
+			err = store.PutAll(keys, values)
+			require.NoError(t, err)
+
+			value, err = store.Get(testDocKey1)
+			require.NoError(t, err)
+			require.Equal(t, testJSONValue1, string(value))
+
+			value, err = store.Get(testDocKey2)
+			require.NoError(t, err)
+			require.Equal(t, testJSONValue2, string(value))
+
+			value, err = store.Get(testDocKey3)
+			require.NoError(t, err)
+			require.Equal(t, testJSONValue3, string(value))
+
+			err = store.PutAll(keys, values)
+			require.NoError(t, err)
+
+			value, err = store.Get(testDocKey1)
+			require.NoError(t, err)
+			require.Equal(t, testJSONValue1, string(value))
+
+			value, err = store.Get(testDocKey2)
+			require.NoError(t, err)
+			require.Equal(t, testJSONValue2, string(value))
+
+			value, err = store.Get(testDocKey3)
+			require.NoError(t, err)
+			require.Equal(t, testJSONValue3, string(value))
+		})
+
+	// The following tests ensure that when the same key appears in a PutAll, that the value that ends up "surviving"
+	// in the end is always the most recent one in the array. This behaviour is crucial for consistency, as the PutAll
+	// method is supposed to have the same end result as calling Put in a loop (except that PutAll will be faster since
+	// it minimizes REST calls)
+	t.Run("Success: values are JSON, updating the same key-value pair multiple times", func(t *testing.T) {
+		t.Run("Put 10 new key-value pairs, then do a bulk put where "+
+			"some of the later puts override earlier ones",
+			func(t *testing.T) {
+				provider := initializeTest(t)
+
+				store := createAndOpenTestStore(t, provider)
+
+				keys := []string{
+					testDocKey1, testDocKey2, testDocKey3, testDocKey4,
+					testDocKey5, testDocKey6, testDocKey7, testDocKey8, testDocKey9, testDocKey10,
+				}
+				values := [][]byte{
+					[]byte(testJSONValue1), []byte(testJSONValue2), []byte(testJSONValue3),
+					[]byte(testJSONValue4), []byte(testJSONValue5), []byte(testJSONValue6), []byte(testJSONValue7),
+					[]byte(testJSONValue8), []byte(testJSONValue9), []byte(testJSONValue10),
+				}
+
+				err := store.PutAll(keys, values)
+				require.NoError(t, err)
+
+				value, err := store.Get(testDocKey1)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue1, string(value))
+
+				value, err = store.Get(testDocKey2)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue2, string(value))
+
+				value, err = store.Get(testDocKey3)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue3, string(value))
+
+				value, err = store.Get(testDocKey4)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue4, string(value))
+
+				value, err = store.Get(testDocKey5)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue5, string(value))
+
+				value, err = store.Get(testDocKey6)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue6, string(value))
+
+				value, err = store.Get(testDocKey7)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue7, string(value))
+
+				value, err = store.Get(testDocKey8)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue8, string(value))
+
+				value, err = store.Get(testDocKey9)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue9, string(value))
+
+				value, err = store.Get(testDocKey10)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue10, string(value))
+
+				keys = []string{
+					testDocKey1, testDocKey2, testDocKey1, testDocKey4,
+					testDocKey5, testDocKey6, testDocKey7, testDocKey2, testDocKey9, testDocKey11, testDocKey1,
+				}
+				values = [][]byte{
+					[]byte(testJSONValue1), []byte(testJSONValue8), []byte(testJSONValue3),
+					[]byte(testJSONValue4), []byte(testJSONValue10), []byte(testJSONValue6), []byte(testJSONValue7),
+					[]byte(testJSONValue1), []byte(testJSONValue9), []byte(testJSONValue11), []byte(testJSONValue10),
+				}
+
+				err = store.PutAll(keys, values)
+				require.NoError(t, err)
+
+				// Now make sure that the last values were the ones that ended up being stored in CouchDB
+				value, err = store.Get(testDocKey1)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue10, string(value))
+
+				value, err = store.Get(testDocKey2)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue1, string(value))
+
+				value, err = store.Get(testDocKey3)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue3, string(value))
+
+				value, err = store.Get(testDocKey4)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue4, string(value))
+
+				value, err = store.Get(testDocKey5)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue10, string(value))
+
+				value, err = store.Get(testDocKey6)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue6, string(value))
+
+				value, err = store.Get(testDocKey7)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue7, string(value))
+
+				value, err = store.Get(testDocKey8)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue8, string(value))
+
+				value, err = store.Get(testDocKey9)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue9, string(value))
+
+				value, err = store.Get(testDocKey10)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue10, string(value))
+
+				value, err = store.Get(testDocKey11)
+				require.NoError(t, err)
+				require.Equal(t, testJSONValue11, string(value))
+			})
+	})
+	t.Run("Success: values are not JSON, updating the same key-value pair multiple times", func(t *testing.T) {
+		t.Run("Put 10 new key-value pairs, then do a bulk put where "+
+			"some of the later puts override earlier ones",
+			func(t *testing.T) {
+				provider := initializeTest(t)
+
+				store := createAndOpenTestStore(t, provider)
+
+				keys := []string{
+					testDocKey1, testDocKey2, testDocKey3, testDocKey4,
+					testDocKey5, testDocKey6, testDocKey7, testDocKey8, testDocKey9, testDocKey10,
+				}
+				values := [][]byte{
+					[]byte(testNonJSONValue1), []byte(testNonJSONValue2), []byte(testNonJSONValue3),
+					[]byte(testNonJSONValue4), []byte(testNonJSONValue5), []byte(testNonJSONValue6),
+					[]byte(testNonJSONValue7), []byte(testNonJSONValue8), []byte(testNonJSONValue9),
+					[]byte(testNonJSONValue10),
+				}
+
+				err := store.PutAll(keys, values)
+				require.NoError(t, err)
+
+				keys = []string{
+					testDocKey1, testDocKey2, testDocKey1, testDocKey4,
+					testDocKey5, testDocKey6, testDocKey7, testDocKey2, testDocKey9, testDocKey11, testDocKey1,
+				}
+				values = [][]byte{
+					[]byte(testNonJSONValue1), []byte(testNonJSONValue8), []byte(testNonJSONValue3),
+					[]byte(testNonJSONValue4), []byte(testNonJSONValue10), []byte(testNonJSONValue6),
+					[]byte(testNonJSONValue7), []byte(testNonJSONValue1), []byte(testNonJSONValue9),
+					[]byte(testNonJSONValue11), []byte(testNonJSONValue10),
+				}
+
+				err = store.PutAll(keys, values)
+				require.NoError(t, err)
+
+				// Now make sure that the last values were the ones that ended up being stored in CouchDB
+				value, err := store.Get(testDocKey1)
+				require.NoError(t, err)
+				require.Equal(t, testNonJSONValue10, string(value))
+
+				value, err = store.Get(testDocKey2)
+				require.NoError(t, err)
+				require.Equal(t, testNonJSONValue1, string(value))
+
+				value, err = store.Get(testDocKey3)
+				require.NoError(t, err)
+				require.Equal(t, testNonJSONValue3, string(value))
+
+				value, err = store.Get(testDocKey4)
+				require.NoError(t, err)
+				require.Equal(t, testNonJSONValue4, string(value))
+
+				value, err = store.Get(testDocKey5)
+				require.NoError(t, err)
+				require.Equal(t, testNonJSONValue10, string(value))
+
+				value, err = store.Get(testDocKey6)
+				require.NoError(t, err)
+				require.Equal(t, testNonJSONValue6, string(value))
+
+				value, err = store.Get(testDocKey7)
+				require.NoError(t, err)
+				require.Equal(t, testNonJSONValue7, string(value))
+
+				value, err = store.Get(testDocKey8)
+				require.NoError(t, err)
+				require.Equal(t, testNonJSONValue8, string(value))
+
+				value, err = store.Get(testDocKey9)
+				require.NoError(t, err)
+				require.Equal(t, testNonJSONValue9, string(value))
+
+				value, err = store.Get(testDocKey10)
+				require.NoError(t, err)
+				require.Equal(t, testNonJSONValue10, string(value))
+
+				value, err = store.Get(testDocKey11)
+				require.NoError(t, err)
+				require.Equal(t, testNonJSONValue11, string(value))
+			})
+	})
+	t.Run("Failure: keys and values are different lengths", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		keys := []string{testDocKey1, testDocKey2}
+		values := [][]byte{[]byte(testJSONValue1), []byte(testJSONValue2), []byte(testJSONValue3)}
+
+		err := store.PutAll(keys, values)
+		require.EqualError(t, err, storage.ErrKeysAndValuesDifferentLengths.Error())
+	})
+	t.Run("Failure: keys slice is nil", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		values := [][]byte{[]byte(testJSONValue1), []byte(testJSONValue2), []byte(testJSONValue3)}
+
+		err := store.PutAll(nil, values)
+		require.EqualError(t, err, storage.ErrNilKeys.Error())
+	})
+	t.Run("Failure: values slice is nil", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		keys := []string{testDocKey1, testDocKey2}
+
+		err := store.PutAll(keys, nil)
+		require.EqualError(t, err, storage.ErrNilValues.Error())
+	})
+	t.Run("Failure: blank key", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		keys := []string{testDocKey1, testDocKey2, ""}
+		values := [][]byte{[]byte(testJSONValue1), []byte(testJSONValue2), []byte(testJSONValue3)}
+
+		err := store.PutAll(keys, values)
+		require.EqualError(t, err, fmt.Errorf(blankKeyErrMsg, 2).Error())
+	})
+	t.Run("Failure: database does not exist", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := provider.couchDBClient.DestroyDB(context.Background(), testStoreName)
+		require.NoError(t, err)
+
+		keys := []string{testDocKey1, testDocKey2, testDocKey3}
+		values := [][]byte{[]byte(testJSONValue1), []byte(testJSONValue2), []byte(testJSONValue3)}
+
+		err = store.PutAll(keys, values)
+		require.EqualError(t, err, "failure while getting rev ID: failure while getting raw CouchDB "+
+			"document: Not Found: Database does not exist.")
+	})
+}
+
+func TestCouchDBStore_Get(t *testing.T) {
+	t.Run("Document found, original data was JSON and is preserved as such", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey1, []byte(testJSONValue1))
+		require.NoError(t, err)
+
+		value, err := store.Get(testDocKey1)
+		require.NoError(t, err)
+		require.Equal(t, testJSONValue1, string(value))
+
+		err = store.Put(testDocKey1, []byte(testJSONValue2))
+		require.NoError(t, err)
+
+		value, err = store.Get(testDocKey1)
+		require.NoError(t, err)
+		require.Equal(t, testJSONValue2, string(value))
+	})
+	t.Run("Document found, original data was not JSON and so was saved as a CouchDB attachment."+
+		" Original data is still preserved", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey1, []byte(testNonJSONValue1))
+		require.NoError(t, err)
+
+		value, err := store.Get(testDocKey1)
+		require.NoError(t, err)
+		require.Equal(t, testNonJSONValue1, string(value))
+
+		err = store.Put(testDocKey1, []byte(testNonJSONValue2))
+		require.NoError(t, err)
+
+		value, err = store.Get(testDocKey1)
+		require.NoError(t, err)
+		require.Equal(t, testNonJSONValue2, string(value))
+	})
+	t.Run("Document not found", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		value, err := store.Get(testDocKey1)
+		require.Nil(t, value)
+		require.Truef(t, errors.Is(err, storage.ErrValueNotFound),
+			`"%s" does not contain the expected error "%s"`, err, storage.ErrValueNotFound)
+	})
+	t.Run("Failure while getting stored value from raw doc", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey1, []byte(testJSONValue1))
+		require.NoError(t, err)
+
+		couchDBStore, ok := store.(*CouchDBStore)
+		require.True(t, ok, "failed to assert store as a *CouchDBStore")
+
+		couchDBStore.marshal = failingMarshal
+
+		value, err := couchDBStore.Get(testDocKey1)
+		require.EqualError(t, err, "failure while getting stored value from raw doc: failure while "+
+			"marshalling stripped doc: failingMarshal always fails")
+		require.Nil(t, value)
+	})
+	t.Run("Failure while getting data from attachment", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey1, []byte(testNonJSONValue1))
+		require.NoError(t, err)
+
+		couchDBStore, ok := store.(*CouchDBStore)
+		require.True(t, ok, "failed to assert store as a *CouchDBStore")
+
+		couchDBStore.readAll = failingReadAll
+
+		value, err := store.Get(testDocKey1)
+		require.EqualError(t, err, "failure while getting stored value from raw doc: failure while "+
+			"getting data from attachment: failure while reading attachment content: failingReadAll always fails")
+		require.Nil(t, value)
 	})
 }
 
@@ -305,16 +833,16 @@ func TestCouchDBStore_GetAll(t *testing.T) {
 		err := createIndex(store, `{"fields": ["SomeField"]}`)
 		require.NoError(t, err)
 
-		err = store.Put(testDocKey, []byte(testJSONValue))
+		err = store.Put(testDocKey1, []byte(testJSONValue1))
 		require.NoError(t, err)
 
-		err = store.Put(testDocKey2, []byte(testJSONValue2))
+		err = store.Put(testDocKey2, []byte(testJSONValue3))
 		require.NoError(t, err)
 
 		allValues, err := store.GetAll()
 		require.NoError(t, err)
-		require.Equal(t, allValues[testDocKey], []byte(testJSONValue))
-		require.Equal(t, allValues[testDocKey2], []byte(testJSONValue2))
+		require.Equal(t, allValues[testDocKey1], []byte(testJSONValue1))
+		require.Equal(t, allValues[testDocKey2], []byte(testJSONValue3))
 		require.Len(t, allValues, 2)
 
 		require.Contains(t, mockLoggerProvider.MockLogger.AllLogContents,
@@ -346,7 +874,7 @@ func TestCouchDBStore_GetAll(t *testing.T) {
 
 		store := createAndOpenTestStore(t, provider)
 
-		err := store.Put(testDocKey, []byte(testJSONValue))
+		err := store.Put(testDocKey1, []byte(testJSONValue1))
 		require.NoError(t, err)
 
 		couchDBStore, ok := store.(*CouchDBStore)
@@ -361,117 +889,29 @@ func TestCouchDBStore_GetAll(t *testing.T) {
 	})
 }
 
-func TestCouchDBStore_Get(t *testing.T) {
-	t.Run("Document found, original data was JSON and is preserved as such", func(t *testing.T) {
-		provider := initializeTest(t)
-
-		store := createAndOpenTestStore(t, provider)
-
-		err := store.Put(testDocKey, []byte(testJSONValue))
-		require.NoError(t, err)
-
-		value, err := store.Get(testDocKey)
-		require.NoError(t, err)
-		require.Equal(t, testJSONValue, string(value))
-
-		err = store.Put(testDocKey, []byte(testJSONValue1))
-		require.NoError(t, err)
-
-		value, err = store.Get(testDocKey)
-		require.NoError(t, err)
-		require.Equal(t, testJSONValue1, string(value))
-	})
-	t.Run("Document found, original data was not JSON and so was saved as a CouchDB attachment."+
-		" Original data is still preserved", func(t *testing.T) {
-		provider := initializeTest(t)
-
-		store := createAndOpenTestStore(t, provider)
-
-		err := store.Put(testDocKey, []byte(testNonJSONValue))
-		require.NoError(t, err)
-
-		value, err := store.Get(testDocKey)
-		require.NoError(t, err)
-		require.Equal(t, testNonJSONValue, string(value))
-
-		err = store.Put(testDocKey, []byte(testNonJSONValue1))
-		require.NoError(t, err)
-
-		value, err = store.Get(testDocKey)
-		require.NoError(t, err)
-		require.Equal(t, testNonJSONValue1, string(value))
-	})
-	t.Run("Document not found", func(t *testing.T) {
-		provider := initializeTest(t)
-
-		store := createAndOpenTestStore(t, provider)
-
-		value, err := store.Get(testDocKey)
-		require.Nil(t, value)
-		require.Truef(t, errors.Is(err, storage.ErrValueNotFound),
-			`"%s" does not contain the expected error "%s"`, err, storage.ErrValueNotFound)
-	})
-	t.Run("Failure while getting stored value from raw doc", func(t *testing.T) {
-		provider := initializeTest(t)
-
-		store := createAndOpenTestStore(t, provider)
-
-		err := store.Put(testDocKey, []byte(testJSONValue))
-		require.NoError(t, err)
-
-		couchDBStore, ok := store.(*CouchDBStore)
-		require.True(t, ok, "failed to assert store as a *CouchDBStore")
-
-		couchDBStore.marshal = failingMarshal
-
-		value, err := couchDBStore.Get(testDocKey)
-		require.EqualError(t, err, "failure while getting stored value from raw doc: failure while "+
-			"marshalling stripped doc: failingMarshal always fails")
-		require.Nil(t, value)
-	})
-	t.Run("Failure while getting data from attachment", func(t *testing.T) {
-		provider := initializeTest(t)
-
-		store := createAndOpenTestStore(t, provider)
-
-		err := store.Put(testDocKey, []byte(testNonJSONValue))
-		require.NoError(t, err)
-
-		couchDBStore, ok := store.(*CouchDBStore)
-		require.True(t, ok, "failed to assert store as a *CouchDBStore")
-
-		couchDBStore.readAll = failingReadAll
-
-		value, err := store.Get(testDocKey)
-		require.EqualError(t, err, "failure while getting stored value from raw doc: failure while "+
-			"getting data from attachment: failure while reading attachment content: failingReadAll always fails")
-		require.Nil(t, value)
-	})
-}
-
 func TestCouchDBStore_getDataFromAttachment(t *testing.T) {
 	t.Run("Attachment found", func(t *testing.T) {
 		provider := initializeTest(t)
 
 		_ = createAndOpenTestStore(t, provider)
 
-		_, err := provider.dbs[testStoreName].db.Put(context.Background(), testDocKey,
-			wrapTextAsCouchDBAttachment([]byte(testNonJSONValue)))
+		_, err := provider.dbs[testStoreName].db.Put(context.Background(), testDocKey1,
+			wrapTextAsCouchDBAttachment([]byte(testNonJSONValue1)))
 		require.NoError(t, err)
 
-		data, err := provider.dbs[testStoreName].getDataFromAttachment(testDocKey)
+		data, err := provider.dbs[testStoreName].getDataFromAttachment(testDocKey1)
 		require.NoError(t, err)
-		require.Equal(t, testNonJSONValue, string(data))
+		require.Equal(t, testNonJSONValue1, string(data))
 	})
 	t.Run("Attachment not found", func(t *testing.T) {
 		provider := initializeTest(t)
 
 		_ = createAndOpenTestStore(t, provider)
 
-		_, err := provider.dbs[testStoreName].db.Put(context.Background(), testDocKey, []byte(testJSONValue1))
+		_, err := provider.dbs[testStoreName].db.Put(context.Background(), testDocKey1, []byte(testJSONValue2))
 		require.NoError(t, err)
 
-		data, err := provider.dbs[testStoreName].getDataFromAttachment(testDocKey)
+		data, err := provider.dbs[testStoreName].getDataFromAttachment(testDocKey1)
 		require.Nil(t, data)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "Not Found: Document is missing attachment")
@@ -507,7 +947,7 @@ func TestCouchDBStore_Query(t *testing.T) {
 		provider := initializeTest(t)
 		store := createAndOpenTestStore(t, provider)
 
-		err := store.Put(testDocKey, []byte(testJSONWithMultipleFields))
+		err := store.Put(testDocKey1, []byte(testJSONWithMultipleFields))
 		require.NoError(t, err)
 
 		err = createIndex(store, `{"fields": ["employeeID"]}`)
@@ -541,7 +981,7 @@ func TestCouchDBStore_Query(t *testing.T) {
 		provider := initializeTest(t)
 		store := createAndOpenTestStore(t, provider)
 
-		err := store.Put(testDocKey, []byte(testJSONWithMultipleFields))
+		err := store.Put(testDocKey1, []byte(testJSONWithMultipleFields))
 		require.NoError(t, err)
 
 		err = store.Put(testDocKey2, []byte(testJSONWithMultipleFields2))
@@ -620,7 +1060,7 @@ func TestCouchDBStore_Query(t *testing.T) {
 			provider := initializeTest(t)
 			store := createAndOpenTestStore(t, provider)
 
-			err := store.Put(testDocKey, []byte(testJSONWithMultipleFields))
+			err := store.Put(testDocKey1, []byte(testJSONWithMultipleFields))
 			require.NoError(t, err)
 
 			err = createIndex(store, `{"fields": ["name"]}`)
@@ -670,8 +1110,8 @@ func TestCouchDBStore_ResultsIterator(t *testing.T) {
 		store := createAndOpenTestStore(t, provider)
 
 		rawData := make(map[string][]byte)
-		rawData[testDocKey] = []byte(testJSONValue)
-		rawData[testDocKey2] = []byte(testJSONValue2)
+		rawData[testDocKey1] = []byte(testJSONValue1)
+		rawData[testDocKey2] = []byte(testJSONValue3)
 		rawData["key3"] = []byte("This value will be stored as an attachment, as opposed to the two values above. " +
 			"This will allow both cases to be tested here.")
 
@@ -744,7 +1184,7 @@ func TestCouchDBStore_ResultsIterator(t *testing.T) {
 		store := createAndOpenTestStore(t, provider)
 
 		rawData := make(map[string][]byte)
-		rawData[testDocKey] = []byte(testJSONValue)
+		rawData[testDocKey1] = []byte(testJSONValue1)
 
 		for k, v := range rawData {
 			err := store.Put(k, v)
@@ -780,10 +1220,10 @@ func TestCouchDBStore_Remove(t *testing.T) {
 
 		store := createAndOpenTestStore(t, provider)
 
-		err := store.Put(testDocKey, []byte(testJSONValue1))
+		err := store.Put(testDocKey1, []byte(testJSONValue2))
 		require.NoError(t, err)
 
-		err = store.Delete(testDocKey)
+		err = store.Delete(testDocKey1)
 		require.NoError(t, err)
 	})
 	t.Run("Document not found", func(t *testing.T) {
@@ -791,7 +1231,7 @@ func TestCouchDBStore_Remove(t *testing.T) {
 
 		store := createAndOpenTestStore(t, provider)
 
-		err := store.Delete(testDocKey)
+		err := store.Delete(testDocKey1)
 		require.Truef(t, errors.Is(err, storage.ErrValueNotFound),
 			`"%s" does not contain the expected error "%s"`, err, storage.ErrValueNotFound)
 	})

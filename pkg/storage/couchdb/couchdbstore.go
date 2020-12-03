@@ -18,8 +18,8 @@ import (
 	"sync"
 
 	// The CouchDB driver.
-	_ "github.com/go-kivik/couchdb"
-	"github.com/go-kivik/kivik"
+	_ "github.com/go-kivik/couchdb/v3"
+	"github.com/go-kivik/kivik/v3"
 
 	"github.com/trustbloc/edge-core/pkg/log"
 	"github.com/trustbloc/edge-core/pkg/storage"
@@ -253,20 +253,48 @@ func (c *CouchDBStore) Put(k string, v []byte) error {
 	return nil
 }
 
-// GetAll fetches all the key-value pairs within this store.
-// TODO: #61 Add support for pagination.
-func (c *CouchDBStore) GetAll() (map[string][]byte, error) {
-	rows, err := c.db.AllDocs(context.Background(), kivik.Options{"include_docs": true})
+// PutAll stores the key-value pairs in the order given in the array. The end result is equivalent to calling
+// Put(k,v) on each key-value pair individually in a loop, but should be faster since this method minimizes REST calls.
+// There is one exception to this equivalency referenced above: in order to minimize REST calls, duplicate keys
+// are removed (along with their associated values), with only the final one remaining. This means that CouchDB will
+// not have any history of those intermediate updates, which it would have had you just used Put(k,v) in a loop.
+// TODO (#120): Add an option to preserve CouchDB history (at the expense of speed).
+func (c *CouchDBStore) PutAll(keys []string, values [][]byte) error {
+	err := validateKeysAndValues(keys, values)
 	if err != nil {
-		return nil, fmt.Errorf(failureWhileGettingAllDocs, err)
+		return err
 	}
 
-	allKeyValuePairs, err := c.getAllKeyValuePairs(rows)
+	// If CouchDB receives the same key multiple times, it will just keep the first change and disregard the rest.
+	// We want the opposite behaviour - we need it to only keep the last change and disregard the earlier ones as if
+	// they've been overwritten.
+	keys, values = removeDuplicatesKeepingOnlyLast(keys, values)
+
+	valuesToPut := make([][]byte, len(keys))
+
+	revIDs, err := c.getRevIDs(keys)
 	if err != nil {
-		return nil, fmt.Errorf(failureWhileGettingAllKeyValuePairs, err)
+		return fmt.Errorf(getRevIDFailureErrMsg, err)
 	}
 
-	return allKeyValuePairs, nil
+	for i, revID := range revIDs {
+		valuesToPut[i], err = c.addIDAndRevID(values[i], keys[i], revID)
+		if err != nil {
+			return fmt.Errorf(failureWhileAddingRevID, err)
+		}
+	}
+
+	valuesToPutAsInterfaces := make([]interface{}, len(valuesToPut))
+	for i, valueToPut := range valuesToPut {
+		valuesToPutAsInterfaces[i] = valueToPut
+	}
+
+	_, err = c.db.BulkDocs(context.Background(), valuesToPutAsInterfaces)
+	if err != nil {
+		return fmt.Errorf(failureWhileDoingBulkDocsCall, err)
+	}
+
+	return nil
 }
 
 // Get retrieves the value in the store associated with the given key.
@@ -282,6 +310,22 @@ func (c *CouchDBStore) Get(k string) ([]byte, error) {
 	}
 
 	return value, nil
+}
+
+// GetAll fetches all the key-value pairs within this store.
+// TODO: #61 Add support for pagination.
+func (c *CouchDBStore) GetAll() (map[string][]byte, error) {
+	rows, err := c.db.AllDocs(context.Background(), kivik.Options{"include_docs": true})
+	if err != nil {
+		return nil, fmt.Errorf(failureWhileGettingAllDocs, err)
+	}
+
+	allKeyValuePairs, err := c.getAllKeyValuePairs(rows)
+	if err != nil {
+		return nil, fmt.Errorf(failureWhileGettingAllKeyValuePairs, err)
+	}
+
+	return allKeyValuePairs, nil
 }
 
 // CreateIndex creates an index based on the provided CreateIndexRequest.
@@ -479,6 +523,54 @@ func (c *CouchDBStore) getRawDoc(k string) (map[string]interface{}, error) {
 	return rawDoc, nil
 }
 
+func (c *CouchDBStore) getRawDocs(keys []string) ([]map[string]interface{}, error) {
+	rawDocs := make([]map[string]interface{}, len(keys))
+
+	bulkGetReferences := make([]kivik.BulkGetReference, len(keys))
+
+	for i, key := range keys {
+		bulkGetReferences[i].ID = key
+	}
+
+	// TODO (#121): See if it's possible to just grab the reference IDs directly instead of pulling down the entire
+	// raw documents.
+	rows, err := c.db.BulkGet(context.Background(), bulkGetReferences)
+	if err != nil {
+		return nil, err
+	}
+
+	ok := rows.Next()
+
+	if !ok {
+		return nil, errors.New("bulk get from CouchDB was unexpectedly empty")
+	}
+
+	for i := 0; i < len(rawDocs); i++ {
+		err := rows.ScanDoc(&rawDocs[i])
+		// In the getRawDoc method, Kivik actually returns a different error message if a document was deleted.
+		// When doing a bulk get, instead Kivik doesn't return an error message, and we have to check the "_deleted"
+		// field in the raw doc. This is done in the getRevIDs method.
+		if err != nil && !strings.Contains(err.Error(), bulkGetDocNotFoundErrMsgFromKivik) {
+			return nil, fmt.Errorf(failureWhileScanningResultRowsDoc, err)
+		}
+
+		ok := rows.Next()
+
+		// ok is expected to be false on the last doc.
+		if i < len(rawDocs)-1 {
+			if !ok {
+				return nil, errors.New("got fewer docs from CouchDB than expected")
+			}
+		} else {
+			if ok {
+				return nil, errors.New("got more docs from CouchDB than expected")
+			}
+		}
+	}
+
+	return rawDocs, nil
+}
+
 func (c *CouchDBStore) getRevID(k string) (string, error) {
 	rawDoc, err := c.getRawDoc(k)
 	if err != nil {
@@ -496,6 +588,50 @@ func (c *CouchDBStore) getRevID(k string) (string, error) {
 	}
 
 	return revIDString, nil
+}
+
+func (c *CouchDBStore) getRevIDs(keys []string) ([]string, error) {
+	rawDocs, err := c.getRawDocs(keys)
+	if err != nil {
+		return nil, fmt.Errorf(getRawDocFailureErrMsg, err)
+	}
+
+	revIDStrings := make([]string, len(rawDocs))
+
+	for i, rawDoc := range rawDocs {
+		if rawDoc == nil {
+			continue
+		}
+
+		// If we're writing over what is currently a deleted document (from CouchDB's point of view),
+		// then we must ensure we don't include a revision ID, otherwise CouchDB keeps the document in a "deleted"
+		// state and it won't be retrievable.
+		isDeleted, containsIsDeleted := rawDoc["_deleted"]
+		if containsIsDeleted {
+			isDeletedBool, ok := isDeleted.(bool)
+			if !ok {
+				return nil, errFailToAssertDeletedAsBool
+			}
+
+			if isDeletedBool {
+				continue
+			}
+		}
+
+		revID, containsRevID := rawDoc["_rev"]
+		if !containsRevID {
+			return nil, errMissingRevIDField
+		}
+
+		revIDString, ok := revID.(string)
+		if !ok {
+			return nil, errFailToAssertRevIDAsString
+		}
+
+		revIDStrings[i] = revIDString
+	}
+
+	return revIDStrings, nil
 }
 
 func (c *CouchDBStore) getDataFromAttachment(k string) ([]byte, error) {
@@ -528,6 +664,81 @@ func (c *CouchDBStore) addRevID(valueToPut []byte, revID string) ([]byte, error)
 	return newValue, nil
 }
 
+func (c *CouchDBStore) addIDAndRevID(valueToPut []byte, id, revID string) ([]byte, error) {
+	if isJSON(valueToPut) {
+		var valueToPutMap map[string]interface{}
+		if err := json.Unmarshal(valueToPut, &valueToPutMap); err != nil {
+			return nil, fmt.Errorf(failureWhileUnmarshallingPutValue, err)
+		}
+
+		valueToPutMap["_id"] = id
+		if revID != "" {
+			valueToPutMap["_rev"] = revID
+		}
+
+		valueWithIDAndRevIDFields, err := json.Marshal(valueToPutMap)
+		if err != nil {
+			return nil, fmt.Errorf(failureWhileMarshallingPutValueWithNewlyAddedIDAndRevID, err)
+		}
+
+		return valueWithIDAndRevIDFields, nil
+	}
+
+	return wrapTextAsCouchDBAttachmentWithIDAndRevID(id, revID, valueToPut), nil
+}
+
+func validateKeysAndValues(keys []string, values [][]byte) error {
+	if keys == nil {
+		return storage.ErrNilKeys
+	}
+
+	if values == nil {
+		return storage.ErrNilValues
+	}
+
+	if len(keys) != len(values) {
+		return storage.ErrKeysAndValuesDifferentLengths
+	}
+
+	for i, key := range keys {
+		if key == "" {
+			return fmt.Errorf(blankKeyErrMsg, i)
+		}
+	}
+
+	return nil
+}
+
+// Unfortunately there's no computationally fast way of removing an element from a slice while maintaining order.
+func removeDuplicatesKeepingOnlyLast(keys []string, values [][]byte) ([]string, [][]byte) {
+	indexOfKeyToCheck := len(keys) - 1
+
+	for indexOfKeyToCheck > 0 {
+		var indicesToRemove []int
+
+		keyToCheck := keys[indexOfKeyToCheck]
+		for i := indexOfKeyToCheck - 1; i >= 0; i-- {
+			if keys[i] == keyToCheck {
+				indicesToRemove = append(indicesToRemove, i)
+			}
+		}
+
+		for _, indexToRemove := range indicesToRemove {
+			keys = append(keys[:indexToRemove], keys[indexToRemove+1:]...)
+			values = append(values[:indexToRemove], values[indexToRemove+1:]...)
+		}
+
+		// At this point, we now know that any duplicates of keys[indexOfKeyToCheck] are removed, and only the last
+		// instance of it remains.
+
+		// Now we need to check the next key in order to ensure it's unique.
+		// If this puts the index out of bounds, then we're done.
+		indexOfKeyToCheck = indexOfKeyToCheck - len(indicesToRemove) - 1
+	}
+
+	return keys, values
+}
+
 func isJSON(textToCheck []byte) bool {
 	var js map[string]interface{}
 
@@ -536,8 +747,26 @@ func isJSON(textToCheck []byte) bool {
 
 // Kivik has a PutAttachment method, but it requires creating a document first and then adding an attachment after.
 // We want to do it all in one step, hence this manual stuff below.
+// If key is provided, then the returned document will have its _id field set to it, otherwise it's left up to the
+// CouchDB server to generate one.
 func wrapTextAsCouchDBAttachment(textToWrap []byte) []byte {
 	encodedTextToWrap := base64.StdEncoding.EncodeToString(textToWrap)
 
-	return []byte(`{"_attachments": {"data": {"data": "` + encodedTextToWrap + `", "content_type": "text/plain"}}}`)
+	return []byte(`{"_attachments":{"data":{"data":"` + encodedTextToWrap + `","content_type":"text/plain"}}}`)
+}
+
+// Kivik has a PutAttachment method, but it requires creating a document first and then adding an attachment after.
+// We want to do it all in one step, hence this manual stuff below.
+// If key is provided, then the returned document will have its _id field set to it, otherwise it's left up to the
+// CouchDB server to generate one.
+func wrapTextAsCouchDBAttachmentWithIDAndRevID(id, revID string, textToWrap []byte) []byte {
+	encodedTextToWrap := base64.StdEncoding.EncodeToString(textToWrap)
+
+	if revID == "" {
+		return []byte(`{"_id":"` + id + `","_attachments":{"data":{"data":"` + encodedTextToWrap +
+			`","content_type":"text/plain"}}}`)
+	}
+
+	return []byte(`{"_id":"` + id + `","_rev":"` + revID + `","_attachments": {"data": {"data": "` +
+		encodedTextToWrap + `", "content_type": "text/plain"}}}`)
 }

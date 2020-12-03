@@ -100,9 +100,21 @@ func (m *MemStore) Put(k string, v []byte) error {
 	return nil
 }
 
-// GetAll fetches all the key-value pairs within this store.
-func (m *MemStore) GetAll() (map[string][]byte, error) {
-	return m.db, nil
+// PutAll stores the key-value pairs in the order given in the array. The end result is equivalent to calling
+// Put(k,v) on each key-value pair individually in a loop.
+func (m *MemStore) PutAll(keys []string, values [][]byte) error {
+	if len(keys) != len(values) {
+		return storage.ErrKeysAndValuesDifferentLengths
+	}
+
+	m.mux.Lock()
+	defer m.mux.Unlock()
+
+	for i := 0; i < len(keys); i++ {
+		m.db[keys[i]] = values[i]
+	}
+
+	return nil
 }
 
 // Get retrieves the value in the store associated with the given key.
@@ -116,6 +128,11 @@ func (m *MemStore) Get(k string) ([]byte, error) {
 	}
 
 	return v, nil
+}
+
+// GetAll fetches all the key-value pairs within this store.
+func (m *MemStore) GetAll() (map[string][]byte, error) {
+	return m.db, nil
 }
 
 // CreateIndex is not supported in memstore, and calling it will always return an error.
