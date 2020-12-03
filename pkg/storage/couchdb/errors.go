@@ -21,9 +21,13 @@ const (
 	failureDuringCouchDBPutCall                        = "failure during CouchDB put document call: %w"
 	failureWhileClosingKivikClient                     = "failure while closing Kivik CouchDB client: %w"
 	failureWhileAddingRevID                            = "failure while adding rev ID: %w"
+	failureWhileDoingBulkDocsCall                      = "failure while doing CouchDB bulk docs call: %w"
+	blankKeyErrMsg                                     = "keys cannot be blank - the key at index %d is blank"
 	failureWhileUnmarshallingPutValue                  = "failure while unmarshalling put value: %w"
 	failureWhileMarshallingPutValueWithNewlyAddedRevID = "failure while unmarshalling put value " +
 		"with newly added rev ID: %w"
+	failureWhileMarshallingPutValueWithNewlyAddedIDAndRevID = "failure while unmarshalling put value " +
+		"with newly added ID and rev ID: %w"
 	getRevIDFailureErrMsg                    = "failure while getting rev ID: %w"
 	getRawDocFailureErrMsg                   = "failure while getting raw CouchDB document: %w"
 	failureDuringCouchDBDeleteCall           = "failure during CouchDB delete document call: %w"
@@ -41,13 +45,15 @@ const (
 	failureWhileGettingAllKeyValuePairs      = "failure while getting all key-value pairs: %w"
 
 	// Error messages returned from Kivik CouchDB client that we directly check for.
-	duplicateDBErrMsgFromKivik = "Precondition Failed: The database could not be created, the file already exists."
-	docNotFoundErrMsgFromKivik = "Not Found: missing"
-	docDeletedErrMsgFromKivik  = "Not Found: deleted"
+	duplicateDBErrMsgFromKivik        = "Precondition Failed: The database could not be created, the file already exists."
+	docNotFoundErrMsgFromKivik        = "Not Found: missing"
+	bulkGetDocNotFoundErrMsgFromKivik = "not_found: missing"
+	docDeletedErrMsgFromKivik         = "Not Found: deleted"
 )
 
 var (
 	errBlankHost                 = errors.New("hostURL for new CouchDB provider can't be blank")
 	errMissingRevIDField         = errors.New("the retrieved CouchDB document is missing the _rev field")
 	errFailToAssertRevIDAsString = errors.New("failed to assert the retrieved rev ID as a string")
+	errFailToAssertDeletedAsBool = errors.New("failed to assert the retrieved deleted field as a bool")
 )

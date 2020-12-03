@@ -257,6 +257,10 @@ func (s *sqlDBStore) Put(k string, v []byte) error {
 	return nil
 }
 
+func (*sqlDBStore) PutAll(keys []string, values [][]byte) error {
+	return storage.ErrPutAllNotImplemented
+}
+
 // GetAll is not implemented.
 func (s *sqlDBStore) GetAll() (map[string][]byte, error) {
 	return nil, storage.ErrGetAllNotSupported

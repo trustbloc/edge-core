@@ -39,11 +39,16 @@ type Store interface {
 	// Put stores the key-value pair.
 	Put(k string, v []byte) error
 
-	// GetAll fetches all the key-value pairs within this store.
-	GetAll() (map[string][]byte, error)
+	// PutAll stores the key-value pairs in the order given in the array. The end result is equivalent to calling
+	// Put(k,v) on each key-value pair individually in a loop, but depending on the implementation
+	// this method may be faster. The keys and values arrays must be the same length.
+	PutAll(keys []string, values [][]byte) error
 
 	// Get fetches the value associated with the given key.
 	Get(k string) ([]byte, error)
+
+	// GetAll fetches all the key-value pairs within this store.
+	GetAll() (map[string][]byte, error)
 
 	// CreateIndex creates an index in the store based on the provided CreateIndexRequest.
 	CreateIndex(createIndexRequest CreateIndexRequest) error
