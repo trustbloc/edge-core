@@ -914,6 +914,7 @@ func TestCouchDBStore_GetBulk(t *testing.T) {
 				fmt.Errorf(getBulkKeyNotFound, testDocKey2, storage.ErrValueNotFound)).Error())
 		require.Nil(t, values)
 	})
+
 	t.Run("Value (stored as JSON) not found after being deleted", func(t *testing.T) {
 		provider := initializeTest(t)
 
@@ -1026,6 +1027,29 @@ func TestCouchDBStore_GetBulk(t *testing.T) {
 			fmt.Errorf(failureWhileGettingStoredValuesFromRawDocs,
 				fmt.Errorf(failureWhileGettingDataFromAttachment,
 					fmt.Errorf(failureWhileReadingAttachmentContent, errFailingReadAll))).Error())
+		require.Nil(t, values)
+	})
+	t.Run("Failure: nil argument", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey1, []byte(testJSONValue1))
+		require.NoError(t, err)
+
+		values, err := store.GetBulk(nil...)
+		require.EqualError(t, err, storage.ErrGetBulkKeysStringSliceNil.Error())
+		require.Nil(t, values)
+	})
+	t.Run("Value not found, bulk get called with only one key", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		values, err := store.GetBulk(testDocKey1)
+		require.EqualError(t, err,
+			fmt.Errorf(failureWhileGettingStoredValuesFromRawDocs,
+				fmt.Errorf(getBulkKeyNotFound, testDocKey1, storage.ErrValueNotFound)).Error())
 		require.Nil(t, values)
 	})
 }

@@ -321,6 +321,10 @@ func (c *CouchDBStore) Get(k string) ([]byte, error) {
 // attachments.
 // If values are stored as attachments, then there are still optimizations that could be done - see TODO #124.
 func (c *CouchDBStore) GetBulk(keys ...string) ([][]byte, error) {
+	if keys == nil {
+		return nil, storage.ErrGetBulkKeysStringSliceNil
+	}
+
 	rawDocs, err := c.getRawDocs(keys)
 	if err != nil {
 		return nil, fmt.Errorf(getRawDocsFailureErrMsg, err)
