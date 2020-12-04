@@ -7,10 +7,13 @@ SPDX-License-Identifier: Apache-2.0
 package memstore
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/trustbloc/edge-core/pkg/storage"
 )
+
+const getBulkKeyNotFound = "no value found for key %s: %w"
 
 // Provider represents an MemStore implementation of the storage.Provider interface.
 type Provider struct {
@@ -100,9 +103,9 @@ func (m *MemStore) Put(k string, v []byte) error {
 	return nil
 }
 
-// PutAll stores the key-value pairs in the order given in the array. The end result is equivalent to calling
+// PutBulk stores the key-value pairs in the order given in the array. The end result is equivalent to calling
 // Put(k,v) on each key-value pair individually in a loop.
-func (m *MemStore) PutAll(keys []string, values [][]byte) error {
+func (m *MemStore) PutBulk(keys []string, values [][]byte) error {
 	if len(keys) != len(values) {
 		return storage.ErrKeysAndValuesDifferentLengths
 	}
@@ -128,6 +131,26 @@ func (m *MemStore) Get(k string) ([]byte, error) {
 	}
 
 	return v, nil
+}
+
+// GetBulk fetches the values associated with the given keys. This method works in an all-or-nothing manner.
+// It returns an error if any of the keys don't exist. If even one key is missing, then no values are returned.
+func (m *MemStore) GetBulk(keys ...string) ([][]byte, error) {
+	storedValues := make([][]byte, len(keys))
+
+	m.mux.RLock()
+	defer m.mux.RUnlock()
+
+	for i, key := range keys {
+		v, exists := m.db[key]
+		if !exists {
+			return nil, fmt.Errorf(getBulkKeyNotFound, key, storage.ErrValueNotFound)
+		}
+
+		storedValues[i] = v
+	}
+
+	return storedValues, nil
 }
 
 // GetAll fetches all the key-value pairs within this store.

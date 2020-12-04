@@ -8,6 +8,7 @@ package memstore // nolint:testpackage // references internal implementation det
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -122,17 +123,27 @@ func TestMemStore_Put(t *testing.T) {
 	require.Equal(t, "someValue", string(value))
 }
 
-func TestMemStore_GetAll(t *testing.T) {
-	store := MemStore{db: make(map[string][]byte)}
+func TestMemStore_PutBulk(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		store := MemStore{db: map[string][]byte{}}
 
-	store.db["testKey"] = []byte("testValue")
-	store.db["testKey2"] = []byte("testValue2")
+		err := store.PutBulk([]string{"someKey", "someKey2"}, [][]byte{[]byte("someValue"), []byte("someValue2")})
+		require.NoError(t, err)
 
-	allValues, err := store.GetAll()
-	require.NoError(t, err)
-	require.Equal(t, allValues["testKey"], []byte("testValue"))
-	require.Equal(t, allValues["testKey2"], []byte("testValue2"))
-	require.Len(t, allValues, 2)
+		value, exists := store.db["someKey"]
+		require.True(t, exists)
+		require.Equal(t, "someValue", string(value))
+
+		value, exists = store.db["someKey2"]
+		require.True(t, exists)
+		require.Equal(t, "someValue2", string(value))
+	})
+	t.Run("Failure: keys and values are different lengths", func(t *testing.T) {
+		store := MemStore{db: map[string][]byte{}}
+
+		err := store.PutBulk([]string{"someKey", "someKey2"}, [][]byte{[]byte("someValue")})
+		require.EqualError(t, err, storage.ErrKeysAndValuesDifferentLengths.Error())
+	})
 }
 
 func TestMemStore_Get(t *testing.T) {
@@ -144,6 +155,41 @@ func TestMemStore_Get(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, []byte("testValue"), value)
+}
+
+func TestMemStore_GetBulk(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		store := MemStore{db: make(map[string][]byte)}
+
+		store.db["testKey"] = []byte("testValue")
+		store.db["testKey2"] = []byte("testValue2")
+
+		values, err := store.GetBulk("testKey", "testKey2")
+		require.NoError(t, err)
+
+		require.Equal(t, []byte("testValue"), values[0])
+		require.Equal(t, []byte("testValue2"), values[1])
+	})
+	t.Run("Failure: key not found", func(t *testing.T) {
+		store := MemStore{db: make(map[string][]byte)}
+
+		values, err := store.GetBulk("testKey", "testKey2")
+		require.EqualError(t, err, fmt.Errorf(getBulkKeyNotFound, "testKey", storage.ErrValueNotFound).Error())
+		require.Nil(t, values)
+	})
+}
+
+func TestMemStore_GetAll(t *testing.T) {
+	store := MemStore{db: make(map[string][]byte)}
+
+	store.db["testKey"] = []byte("testValue")
+	store.db["testKey2"] = []byte("testValue2")
+
+	allValues, err := store.GetAll()
+	require.NoError(t, err)
+	require.Equal(t, allValues["testKey"], []byte("testValue"))
+	require.Equal(t, allValues["testKey2"], []byte("testValue2"))
+	require.Len(t, allValues, 2)
 }
 
 func TestMemStore_CreateIndex(t *testing.T) {

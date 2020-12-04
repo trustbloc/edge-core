@@ -56,8 +56,9 @@ type MockStore struct {
 	Store                   map[string][]byte
 	lock                    sync.RWMutex
 	ErrPut                  error
-	ErrPutAll               error
+	ErrPutBulk              error
 	ErrGet                  error
+	ErrBulkGet              error
 	ErrGetAll               error
 	ErrCreateIndex          error
 	ErrQuery                error
@@ -78,9 +79,9 @@ func (s *MockStore) Put(k string, v []byte) error {
 	return s.ErrPut
 }
 
-// PutAll stores the key-value pairs in the order given in the array. The end result is equivalent to calling
+// PutBulk stores the key-value pairs in the order given in the array. The end result is equivalent to calling
 // Put(k,v) on each key-value pair individually in a loop.
-func (s *MockStore) PutAll(keys []string, values [][]byte) error {
+func (s *MockStore) PutBulk(keys []string, values [][]byte) error {
 	if len(keys) != len(values) {
 		return storage.ErrKeysAndValuesDifferentLengths
 	}
@@ -96,7 +97,7 @@ func (s *MockStore) PutAll(keys []string, values [][]byte) error {
 		s.Store[keys[i]] = values[i]
 	}
 
-	return s.ErrPutAll
+	return s.ErrPutBulk
 }
 
 // Get fetches the value associated with the given key.
@@ -110,6 +111,26 @@ func (s *MockStore) Get(k string) ([]byte, error) {
 	}
 
 	return val, s.ErrGet
+}
+
+// GetBulk fetches the values associated with the given keys. This method works in an all-or-nothing manner.
+// It returns an error if any of the keys don't exist. If even one key is missing, then no values are returned.
+func (s *MockStore) GetBulk(keys ...string) ([][]byte, error) {
+	storedValues := make([][]byte, len(keys))
+
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	for i, key := range keys {
+		v, exists := s.Store[key]
+		if !exists {
+			return nil, fmt.Errorf("no value found for key %s: %w", key, storage.ErrValueNotFound)
+		}
+
+		storedValues[i] = v
+	}
+
+	return storedValues, s.ErrBulkGet
 }
 
 // GetAll fetches all the key-value pairs within this store.

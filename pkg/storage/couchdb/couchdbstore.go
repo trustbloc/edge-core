@@ -32,6 +32,8 @@ const (
 
 	designDocumentFilteredOutLogMsg = "Getting all documents from a CouchDB store. " +
 		"A document with id %s was filtered out since it's a CouchDB design document."
+
+	getBulkKeyNotFound = "no value found for key %s: %w"
 )
 
 var logger = log.New(logModuleName)
@@ -253,13 +255,13 @@ func (c *CouchDBStore) Put(k string, v []byte) error {
 	return nil
 }
 
-// PutAll stores the key-value pairs in the order given in the array. The end result is equivalent to calling
+// PutBulk stores the key-value pairs in the order given in the array. The end result is equivalent to calling
 // Put(k,v) on each key-value pair individually in a loop, but should be faster since this method minimizes REST calls.
 // There is one exception to this equivalency referenced above: in order to minimize REST calls, duplicate keys
 // are removed (along with their associated values), with only the final one remaining. This means that CouchDB will
 // not have any history of those intermediate updates, which it would have had you just used Put(k,v) in a loop.
 // TODO (#120): Add an option to preserve CouchDB history (at the expense of speed).
-func (c *CouchDBStore) PutAll(keys []string, values [][]byte) error {
+func (c *CouchDBStore) PutBulk(keys []string, values [][]byte) error {
 	err := validateKeysAndValues(keys, values)
 	if err != nil {
 		return err
@@ -310,6 +312,26 @@ func (c *CouchDBStore) Get(k string) ([]byte, error) {
 	}
 
 	return value, nil
+}
+
+// GetBulk fetches the values associated with the given keys. This method works in an all-or-nothing manner.
+// It returns an error if any of the keys don't exist. If even one key is missing, then no values are returned.
+// The end result is equivalent to calling Get(k,v) on each key-value pair individually in a loop,
+// but should be faster since this method minimizes REST calls as long as the values were stored as JSON instead of
+// attachments.
+// If values are stored as attachments, then there are still optimizations that could be done - see TODO #124.
+func (c *CouchDBStore) GetBulk(keys ...string) ([][]byte, error) {
+	rawDocs, err := c.getRawDocs(keys)
+	if err != nil {
+		return nil, fmt.Errorf(getRawDocsFailureErrMsg, err)
+	}
+
+	values, err := c.getStoredValuesFromRawDocs(rawDocs, keys)
+	if err != nil {
+		return nil, fmt.Errorf(failureWhileGettingStoredValuesFromRawDocs, err)
+	}
+
+	return values, nil
 }
 
 // GetAll fetches all the key-value pairs within this store.
@@ -505,6 +527,58 @@ func (c *CouchDBStore) getStoredValueFromRawDoc(rawDoc map[string]interface{}, k
 	return strippedJSON, nil
 }
 
+func (c *CouchDBStore) getStoredValuesFromRawDocs(rawDocs []map[string]interface{}, keys []string) ([][]byte, error) {
+	storedValues := make([][]byte, len(keys))
+
+	for i, rawDoc := range rawDocs {
+		if rawDoc == nil {
+			return nil, fmt.Errorf(getBulkKeyNotFound, keys[i], storage.ErrValueNotFound)
+		}
+
+		// CouchDB still returns a raw document is the key has been deleted, so if this is a "deleted" raw document
+		// then we need to return the "value not found" error in order to maintain consistent behaviour with
+		// other storage implementations.
+		isDeleted, containsIsDeleted := rawDoc["_deleted"]
+		if containsIsDeleted {
+			isDeletedBool, ok := isDeleted.(bool)
+			if !ok {
+				return nil, errFailToAssertDeletedAsBool
+			}
+
+			if isDeletedBool {
+				return nil, fmt.Errorf(getBulkKeyNotFound, keys[i], storage.ErrValueNotFound)
+			}
+		}
+
+		// TODO (#124): The getDataFromAttachment call will do a REST call to the CouchDB server.
+		//  We should get all the attachments as once in a bulk REST call.
+		_, containsAttachment := rawDoc["_attachments"]
+		if containsAttachment {
+			data, err := c.getDataFromAttachment(keys[i])
+			if err != nil {
+				return nil, fmt.Errorf(failureWhileGettingDataFromAttachment, err)
+			}
+
+			storedValues[i] = data
+
+			continue
+		}
+
+		// Strip out the CouchDB-specific fields
+		delete(rawDoc, "_id")
+		delete(rawDoc, "_rev")
+
+		strippedJSON, err := c.marshal(rawDoc)
+		if err != nil {
+			return nil, fmt.Errorf(failureWhileMarshallingStrippedDoc, err)
+		}
+
+		storedValues[i] = strippedJSON
+	}
+
+	return storedValues, nil
+}
+
 func (c *CouchDBStore) getRawDoc(k string) (map[string]interface{}, error) {
 	rawDoc := make(map[string]interface{})
 
@@ -523,6 +597,8 @@ func (c *CouchDBStore) getRawDoc(k string) (map[string]interface{}, error) {
 	return rawDoc, nil
 }
 
+// getRawDocs returns the raw documents from CouchDB using a bulk REST call.
+// If a document is not found, then the raw document will be nil. It is not considered an error.
 func (c *CouchDBStore) getRawDocs(keys []string) ([]map[string]interface{}, error) {
 	rawDocs := make([]map[string]interface{}, len(keys))
 
@@ -593,7 +669,7 @@ func (c *CouchDBStore) getRevID(k string) (string, error) {
 func (c *CouchDBStore) getRevIDs(keys []string) ([]string, error) {
 	rawDocs, err := c.getRawDocs(keys)
 	if err != nil {
-		return nil, fmt.Errorf(getRawDocFailureErrMsg, err)
+		return nil, fmt.Errorf(getRawDocsFailureErrMsg, err)
 	}
 
 	revIDStrings := make([]string, len(rawDocs))

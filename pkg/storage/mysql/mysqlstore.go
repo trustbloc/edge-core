@@ -257,13 +257,8 @@ func (s *sqlDBStore) Put(k string, v []byte) error {
 	return nil
 }
 
-func (*sqlDBStore) PutAll(keys []string, values [][]byte) error {
-	return storage.ErrPutAllNotImplemented
-}
-
-// GetAll is not implemented.
-func (s *sqlDBStore) GetAll() (map[string][]byte, error) {
-	return nil, storage.ErrGetAllNotSupported
+func (*sqlDBStore) PutBulk(keys []string, values [][]byte) error {
+	return storage.ErrPutBulkNotImplemented
 }
 
 // Get fetches the value based on key.
@@ -287,6 +282,16 @@ func (s *sqlDBStore) Get(k string) ([]byte, error) {
 	}
 
 	return value, nil
+}
+
+// GetBulk is not implemented.
+func (*sqlDBStore) GetBulk(...string) ([][]byte, error) {
+	return nil, storage.ErrGetBulkNotImplemented
+}
+
+// GetAll is not implemented.
+func (s *sqlDBStore) GetAll() (map[string][]byte, error) {
+	return nil, storage.ErrGetAllNotSupported
 }
 
 type sqlDBResultsIterator struct {
