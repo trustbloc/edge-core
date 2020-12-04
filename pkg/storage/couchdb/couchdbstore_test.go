@@ -319,7 +319,7 @@ func TestCouchDBStore_Put(t *testing.T) {
 	})
 }
 
-func TestCouchDBStore_PutAll(t *testing.T) {
+func TestCouchDBStore_PutBulk(t *testing.T) {
 	t.Run("Success: values are JSON, all new values", func(t *testing.T) {
 		provider := initializeTest(t)
 
@@ -328,7 +328,7 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 		keys := []string{testDocKey1, testDocKey2, testDocKey3}
 		values := [][]byte{[]byte(testJSONValue1), []byte(testJSONValue2), []byte(testJSONValue3)}
 
-		err := store.PutAll(keys, values)
+		err := store.PutBulk(keys, values)
 		require.NoError(t, err)
 
 		value, err := store.Get(testDocKey1)
@@ -351,7 +351,7 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 		keys := []string{testDocKey1, testDocKey2, testDocKey3}
 		values := [][]byte{[]byte(testJSONValue1), []byte(testJSONValue2), []byte(testJSONValue3)}
 
-		err := store.PutAll(keys, values)
+		err := store.PutBulk(keys, values)
 		require.NoError(t, err)
 
 		value, err := store.Get(testDocKey1)
@@ -366,7 +366,7 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, testJSONValue3, string(value))
 
-		err = store.PutAll(keys, values)
+		err = store.PutBulk(keys, values)
 		require.NoError(t, err)
 
 		value, err = store.Get(testDocKey1)
@@ -407,7 +407,7 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 			keys := []string{testDocKey1, testDocKey2, testDocKey3}
 			values := [][]byte{[]byte(testJSONValue1), []byte(testJSONValue2), []byte(testJSONValue3)}
 
-			err = store.PutAll(keys, values)
+			err = store.PutBulk(keys, values)
 			require.NoError(t, err)
 
 			value, err = store.Get(testDocKey1)
@@ -438,7 +438,7 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 				"result rows doc: store does not have a value associated with this key")
 			require.Nil(t, value)
 
-			err = store.PutAll(keys, values)
+			err = store.PutBulk(keys, values)
 			require.NoError(t, err)
 
 			value, err = store.Get(testDocKey1)
@@ -453,7 +453,7 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, testJSONValue3, string(value))
 
-			err = store.PutAll(keys, values)
+			err = store.PutBulk(keys, values)
 			require.NoError(t, err)
 
 			value, err = store.Get(testDocKey1)
@@ -469,9 +469,9 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 			require.Equal(t, testJSONValue3, string(value))
 		})
 
-	// The following tests ensure that when the same key appears in a PutAll, that the value that ends up "surviving"
-	// in the end is always the most recent one in the array. This behaviour is crucial for consistency, as the PutAll
-	// method is supposed to have the same end result as calling Put in a loop (except that PutAll will be faster since
+	// The following tests ensure that when the same key appears in a PutBulk, that the value that ends up "surviving"
+	// in the end is always the most recent one in the array. This behaviour is crucial for consistency, as the PutBulk
+	// method is supposed to have the same end result as calling Put in a loop (except that PutBulk will be faster since
 	// it minimizes REST calls)
 	t.Run("Success: values are JSON, updating the same key-value pair multiple times", func(t *testing.T) {
 		t.Run("Put 10 new key-value pairs, then do a bulk put where "+
@@ -491,7 +491,7 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 					[]byte(testJSONValue8), []byte(testJSONValue9), []byte(testJSONValue10),
 				}
 
-				err := store.PutAll(keys, values)
+				err := store.PutBulk(keys, values)
 				require.NoError(t, err)
 
 				value, err := store.Get(testDocKey1)
@@ -544,7 +544,7 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 					[]byte(testJSONValue1), []byte(testJSONValue9), []byte(testJSONValue11), []byte(testJSONValue10),
 				}
 
-				err = store.PutAll(keys, values)
+				err = store.PutBulk(keys, values)
 				require.NoError(t, err)
 
 				// Now make sure that the last values were the ones that ended up being stored in CouchDB
@@ -612,7 +612,7 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 					[]byte(testNonJSONValue10),
 				}
 
-				err := store.PutAll(keys, values)
+				err := store.PutBulk(keys, values)
 				require.NoError(t, err)
 
 				keys = []string{
@@ -626,7 +626,7 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 					[]byte(testNonJSONValue11), []byte(testNonJSONValue10),
 				}
 
-				err = store.PutAll(keys, values)
+				err = store.PutBulk(keys, values)
 				require.NoError(t, err)
 
 				// Now make sure that the last values were the ones that ended up being stored in CouchDB
@@ -683,7 +683,7 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 		keys := []string{testDocKey1, testDocKey2}
 		values := [][]byte{[]byte(testJSONValue1), []byte(testJSONValue2), []byte(testJSONValue3)}
 
-		err := store.PutAll(keys, values)
+		err := store.PutBulk(keys, values)
 		require.EqualError(t, err, storage.ErrKeysAndValuesDifferentLengths.Error())
 	})
 	t.Run("Failure: keys slice is nil", func(t *testing.T) {
@@ -693,7 +693,7 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 
 		values := [][]byte{[]byte(testJSONValue1), []byte(testJSONValue2), []byte(testJSONValue3)}
 
-		err := store.PutAll(nil, values)
+		err := store.PutBulk(nil, values)
 		require.EqualError(t, err, storage.ErrNilKeys.Error())
 	})
 	t.Run("Failure: values slice is nil", func(t *testing.T) {
@@ -703,7 +703,7 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 
 		keys := []string{testDocKey1, testDocKey2}
 
-		err := store.PutAll(keys, nil)
+		err := store.PutBulk(keys, nil)
 		require.EqualError(t, err, storage.ErrNilValues.Error())
 	})
 	t.Run("Failure: blank key", func(t *testing.T) {
@@ -714,7 +714,7 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 		keys := []string{testDocKey1, testDocKey2, ""}
 		values := [][]byte{[]byte(testJSONValue1), []byte(testJSONValue2), []byte(testJSONValue3)}
 
-		err := store.PutAll(keys, values)
+		err := store.PutBulk(keys, values)
 		require.EqualError(t, err, fmt.Errorf(blankKeyErrMsg, 2).Error())
 	})
 	t.Run("Failure: database does not exist", func(t *testing.T) {
@@ -728,9 +728,9 @@ func TestCouchDBStore_PutAll(t *testing.T) {
 		keys := []string{testDocKey1, testDocKey2, testDocKey3}
 		values := [][]byte{[]byte(testJSONValue1), []byte(testJSONValue2), []byte(testJSONValue3)}
 
-		err = store.PutAll(keys, values)
+		err = store.PutBulk(keys, values)
 		require.EqualError(t, err, "failure while getting rev ID: failure while getting raw CouchDB "+
-			"document: Not Found: Database does not exist.")
+			"documents: Not Found: Database does not exist.")
 	})
 }
 
@@ -819,6 +819,214 @@ func TestCouchDBStore_Get(t *testing.T) {
 		require.EqualError(t, err, "failure while getting stored value from raw doc: failure while "+
 			"getting data from attachment: failure while reading attachment content: failingReadAll always fails")
 		require.Nil(t, value)
+	})
+}
+
+func TestCouchDBStore_GetBulk(t *testing.T) {
+	t.Run("All data found, original data was JSON and is preserved as such", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey1, []byte(testJSONValue1))
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey2, []byte(testJSONValue2))
+		require.NoError(t, err)
+
+		values, err := store.GetBulk(testDocKey1, testDocKey2)
+		require.NoError(t, err)
+		require.Equal(t, testJSONValue1, string(values[0]))
+		require.Equal(t, testJSONValue2, string(values[1]))
+	})
+	t.Run("All data found, original data was not JSON and so was saved as a CouchDB attachment."+
+		" Original data is still preserved", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey1, []byte(testNonJSONValue1))
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey2, []byte(testNonJSONValue2))
+		require.NoError(t, err)
+
+		values, err := store.GetBulk(testDocKey1, testDocKey2)
+		require.NoError(t, err)
+		require.Equal(t, testNonJSONValue1, string(values[0]))
+		require.Equal(t, testNonJSONValue2, string(values[1]))
+
+		err = store.Put(testDocKey1, []byte(testNonJSONValue2))
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey2, []byte(testNonJSONValue3))
+		require.NoError(t, err)
+
+		values, err = store.GetBulk(testDocKey1, testDocKey2)
+		require.NoError(t, err)
+		require.Equal(t, testNonJSONValue2, string(values[0]))
+		require.Equal(t, testNonJSONValue3, string(values[1]))
+	})
+	t.Run("All data found, data was stored in CouchDB as a mix of JSON and CouchDB attachments and was "+
+		"converted back to their original format as expected", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey1, []byte(testJSONValue1))
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey2, []byte(testNonJSONValue2))
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey3, []byte(testNonJSONValue3))
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey4, []byte(testJSONValue4))
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey5, []byte(testNonJSONValue5))
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey6, []byte(testJSONValue6))
+		require.NoError(t, err)
+
+		values, err := store.GetBulk(testDocKey1, testDocKey2, testDocKey3, testDocKey4, testDocKey5, testDocKey6)
+		require.NoError(t, err)
+		require.Equal(t, testJSONValue1, string(values[0]))
+		require.Equal(t, testNonJSONValue2, string(values[1]))
+		require.Equal(t, testNonJSONValue3, string(values[2]))
+		require.Equal(t, testJSONValue4, string(values[3]))
+		require.Equal(t, testNonJSONValue5, string(values[4]))
+		require.Equal(t, testJSONValue6, string(values[5]))
+	})
+	t.Run("Value (stored as JSON) not found", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey1, []byte(testJSONValue1))
+		require.NoError(t, err)
+
+		values, err := store.GetBulk(testDocKey1, testDocKey2)
+		require.EqualError(t, err,
+			fmt.Errorf(failureWhileGettingStoredValuesFromRawDocs,
+				fmt.Errorf(getBulkKeyNotFound, testDocKey2, storage.ErrValueNotFound)).Error())
+		require.Nil(t, values)
+	})
+	t.Run("Value (stored as JSON) not found after being deleted", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey1, []byte(testJSONValue1))
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey2, []byte(testJSONValue2))
+		require.NoError(t, err)
+
+		err = store.Delete(testDocKey2)
+		require.NoError(t, err)
+
+		values, err := store.GetBulk(testDocKey1, testDocKey2)
+		require.EqualError(t, err,
+			fmt.Errorf(failureWhileGettingStoredValuesFromRawDocs,
+				fmt.Errorf(getBulkKeyNotFound, testDocKey2, storage.ErrValueNotFound)).Error())
+		require.Nil(t, values)
+	})
+	t.Run("Value (stored as an attachment) not found", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey1, []byte(testNonJSONValue1))
+		require.NoError(t, err)
+
+		values, err := store.GetBulk(testDocKey1, testDocKey2)
+		require.EqualError(t, err,
+			fmt.Errorf(failureWhileGettingStoredValuesFromRawDocs,
+				fmt.Errorf(getBulkKeyNotFound, testDocKey2, storage.ErrValueNotFound)).Error())
+		require.Nil(t, values)
+	})
+	t.Run("Value (stored as an attachment) not found after being deleted", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey1, []byte(testNonJSONValue1))
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey2, []byte(testNonJSONValue2))
+		require.NoError(t, err)
+
+		err = store.Delete(testDocKey2)
+		require.NoError(t, err)
+
+		values, err := store.GetBulk(testDocKey1, testDocKey2)
+		require.EqualError(t, err,
+			fmt.Errorf(failureWhileGettingStoredValuesFromRawDocs,
+				fmt.Errorf(getBulkKeyNotFound, testDocKey2, storage.ErrValueNotFound)).Error())
+		require.Nil(t, values)
+	})
+	t.Run("Database not found", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := provider.couchDBClient.DestroyDB(context.Background(), testStoreName)
+		require.NoError(t, err)
+
+		keys := []string{testDocKey1, testDocKey2, testDocKey3}
+
+		values, err := store.GetBulk(keys...)
+		require.EqualError(t, err, "failure while getting raw CouchDB documents: Not Found: "+
+			"Database does not exist.")
+		require.Nil(t, values)
+	})
+	t.Run("Failure while getting stored value from raw doc", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey1, []byte(testJSONValue1))
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey2, []byte(testJSONValue2))
+		require.NoError(t, err)
+
+		couchDBStore, ok := store.(*CouchDBStore)
+		require.True(t, ok, "failed to assert store as a *CouchDBStore")
+
+		couchDBStore.marshal = failingMarshal
+
+		values, err := store.GetBulk(testDocKey1, testDocKey2)
+		require.EqualError(t, err,
+			fmt.Errorf(failureWhileGettingStoredValuesFromRawDocs,
+				fmt.Errorf(failureWhileMarshallingStrippedDoc, errFailingMarshal)).Error())
+		require.Nil(t, values)
+	})
+	t.Run("Failure while getting data from attachment", func(t *testing.T) {
+		provider := initializeTest(t)
+
+		store := createAndOpenTestStore(t, provider)
+
+		err := store.Put(testDocKey1, []byte(testNonJSONValue1))
+		require.NoError(t, err)
+
+		err = store.Put(testDocKey2, []byte(testNonJSONValue2))
+		require.NoError(t, err)
+
+		couchDBStore, ok := store.(*CouchDBStore)
+		require.True(t, ok, "failed to assert store as a *CouchDBStore")
+
+		couchDBStore.readAll = failingReadAll
+
+		values, err := store.GetBulk(testDocKey1, testDocKey2)
+		require.EqualError(t, err,
+			fmt.Errorf(failureWhileGettingStoredValuesFromRawDocs,
+				fmt.Errorf(failureWhileGettingDataFromAttachment,
+					fmt.Errorf(failureWhileReadingAttachmentContent, errFailingReadAll))).Error())
+		require.Nil(t, values)
 	})
 }
 

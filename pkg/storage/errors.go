@@ -22,24 +22,24 @@ var ErrIndexingNotSupported = errors.New("indexing is not supported")
 // ErrQueryingNotSupported  is used when querying is not supported by the store implementation.
 var ErrQueryingNotSupported = errors.New("querying is not supported")
 
-// ErrBookmarksNotSupported is used when bookmarks are not supported by the store implementation.
-var ErrBookmarksNotSupported = errors.New("bookmarks are not supported")
-
 // ErrGetAllNotSupported is used when the get all function is not supported by the store implementation.
 var ErrGetAllNotSupported = errors.New("getting all key-value pairs is not supported")
 
 // ErrKeyRequired is returned when an attempt is made to call a method with an empty key when it's not allowed.
 var ErrKeyRequired = errors.New("key is mandatory")
 
-// ErrPutAllNotImplemented is returned when PutAll is not implemented by the store implementation.
-var ErrPutAllNotImplemented = errors.New("put all not implemented")
+// ErrPutBulkNotImplemented is returned when PutBulk is not implemented by the store implementation.
+var ErrPutBulkNotImplemented = errors.New("put bulk not implemented")
 
-// ErrNilKeys is returned when PutAll is called with a nil keys slice.
+// ErrGetBulkNotImplemented is returned when GetBulk is not implemented by the store implementation.
+var ErrGetBulkNotImplemented = errors.New("get bulk not implemented")
+
+// ErrNilKeys is returned when PutBulk is called with a nil keys slice.
 var ErrNilKeys = errors.New("keys slice cannot be nil")
 
-// ErrNilValues is returned when PutAll is called with a nil values slice.
+// ErrNilValues is returned when PutBulk is called with a nil values slice.
 var ErrNilValues = errors.New("values slice cannot be nil")
 
-// ErrKeysAndValuesDifferentLengths is returned when an attempt is made to call the PutAll method with
+// ErrKeysAndValuesDifferentLengths is returned when an attempt is made to call the PutBulk method with
 // differently sized keys and values arrays.
 var ErrKeysAndValuesDifferentLengths = errors.New("keys and values must be the same length")

@@ -39,13 +39,17 @@ type Store interface {
 	// Put stores the key-value pair.
 	Put(k string, v []byte) error
 
-	// PutAll stores the key-value pairs in the order given in the array. The end result is equivalent to calling
-	// Put(k,v) on each key-value pair individually in a loop, but depending on the implementation
-	// this method may be faster. The keys and values arrays must be the same length.
-	PutAll(keys []string, values [][]byte) error
+	// PutAll stores the key-value pairs in the order given in the array. Depending on the implementation
+	// this method may be faster than repeated Put calls. The keys and values slices must be the same length.
+	PutBulk(keys []string, values [][]byte) error
 
 	// Get fetches the value associated with the given key.
 	Get(k string) ([]byte, error)
+
+	// GetBulk fetches the values associated with the given keys. This method works in an all-or-nothing manner.
+	// It returns an error if any of the keys don't exist. If even one key is missing, then no values are returned.
+	// This method may be faster than calling Get for each key individually depending on the implementation.
+	GetBulk(k ...string) ([][]byte, error)
 
 	// GetAll fetches all the key-value pairs within this store.
 	GetAll() (map[string][]byte, error)
