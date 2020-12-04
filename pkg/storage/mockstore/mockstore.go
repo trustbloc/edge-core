@@ -116,6 +116,10 @@ func (s *MockStore) Get(k string) ([]byte, error) {
 // GetBulk fetches the values associated with the given keys. This method works in an all-or-nothing manner.
 // It returns an error if any of the keys don't exist. If even one key is missing, then no values are returned.
 func (s *MockStore) GetBulk(keys ...string) ([][]byte, error) {
+	if keys == nil {
+		return nil, storage.ErrGetBulkKeysStringSliceNil
+	}
+
 	storedValues := make([][]byte, len(keys))
 
 	s.lock.RLock()

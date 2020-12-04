@@ -177,6 +177,20 @@ func TestMemStore_GetBulk(t *testing.T) {
 		require.EqualError(t, err, fmt.Errorf(getBulkKeyNotFound, "testKey", storage.ErrValueNotFound).Error())
 		require.Nil(t, values)
 	})
+	t.Run("Failure: key not found, called with a single key", func(t *testing.T) {
+		store := MemStore{db: make(map[string][]byte)}
+
+		values, err := store.GetBulk("testKey")
+		require.EqualError(t, err, fmt.Errorf(getBulkKeyNotFound, "testKey", storage.ErrValueNotFound).Error())
+		require.Nil(t, values)
+	})
+	t.Run("Failure: nil argument", func(t *testing.T) {
+		store := MemStore{db: make(map[string][]byte)}
+
+		values, err := store.GetBulk(nil...)
+		require.EqualError(t, err, storage.ErrGetBulkKeysStringSliceNil.Error())
+		require.Nil(t, values)
+	})
 }
 
 func TestMemStore_GetAll(t *testing.T) {

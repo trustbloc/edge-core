@@ -43,3 +43,7 @@ var ErrNilValues = errors.New("values slice cannot be nil")
 // ErrKeysAndValuesDifferentLengths is returned when an attempt is made to call the PutBulk method with
 // differently sized keys and values arrays.
 var ErrKeysAndValuesDifferentLengths = errors.New("keys and values must be the same length")
+
+// ErrGetBulkKeysStringSliceNil is returned when an attempt is made to call the GetBulk method with a nil slice of
+// strings.
+var ErrGetBulkKeysStringSliceNil = errors.New("keys string slice cannot be nil")
