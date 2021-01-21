@@ -72,6 +72,7 @@ func TestNewCapability(t *testing.T) {
 			},
 		}
 		capabilityChain := []interface{}{fmt.Sprintf("urn:zcap:%s", uuid.New().String())}
+		loaderCache := map[string]interface{}{"contextURL": `{"@context":"id": "@id"}`}
 		signer := testSigner(t, kms.ED25519)
 		challenge := uuid.New().String()
 		domain := uuid.New().String()
@@ -92,6 +93,7 @@ func TestNewCapability(t *testing.T) {
 			zcapld.WithChallenge(challenge),
 			zcapld.WithDomain(domain),
 			zcapld.WithCapabilityChain(capabilityChain...),
+			zcapld.WithDocumentLoaderCache(loaderCache),
 		)
 		require.NoError(t, err)
 		require.NotNil(t, result)
