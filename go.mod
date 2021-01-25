@@ -13,9 +13,9 @@ require (
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/google/uuid v1.1.2
 	github.com/hashicorp/vault v1.2.1-0.20200911125421-dba37adcb55a
-	github.com/hyperledger/aries-framework-go v0.1.5
+	github.com/hyperledger/aries-framework-go v0.1.6-0.20210122151214-1a54003224a0
 	github.com/igor-pavlenko/httpsignatures-go v0.0.21
-	github.com/piprate/json-gold v0.3.0
+	github.com/piprate/json-gold v0.3.1-0.20201222165305-f4ce31c02ca3
 	github.com/spf13/cobra v0.0.6
 	github.com/stretchr/testify v1.6.1
 	golang.org/x/net v0.0.0-20201202161906-c7110b5ffcbb // indirect

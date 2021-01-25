@@ -65,12 +65,12 @@ func (d *DIDKeyResolver) Resolve(didKeyURL string) (*verifier.PublicKey, error) 
 		return nil, fmt.Errorf("not a did:key URL: %s", didKeyURL)
 	}
 
-	doc, err := didkey.New().Read(parts[0])
+	docResolution, err := didkey.New().Read(parts[0])
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url %s: %w", parts[0], err)
 	}
 
-	for _, vm := range doc.VerificationMethods(did.CapabilityDelegation)[did.CapabilityDelegation] {
+	for _, vm := range docResolution.DIDDocument.VerificationMethods(did.CapabilityDelegation)[did.CapabilityDelegation] {
 		if parts[1] == vm.VerificationMethod.ID || didKeyURL == vm.VerificationMethod.ID {
 			return &verifier.PublicKey{
 				Type:  vm.VerificationMethod.Type,
