@@ -34,17 +34,16 @@ func ParseCapability(raw []byte) (*Capability, error) {
 
 // CapabilityOptions configures capabilities.
 type CapabilityOptions struct {
-	ID                  string
-	Parent              string
-	Invoker             string
-	Controller          string
-	Delegator           string
-	AllowedAction       []string
-	InvocationTarget    InvocationTarget
-	Challenge           string
-	Domain              string
-	CapabilityChain     []interface{}
-	DocumentLoaderCache map[string]interface{}
+	ID               string
+	Parent           string
+	Invoker          string
+	Controller       string
+	Delegator        string
+	AllowedAction    []string
+	InvocationTarget InvocationTarget
+	Challenge        string
+	Domain           string
+	CapabilityChain  []interface{}
 }
 
 // CapabilityOption configures CapabilityOptions.
@@ -123,18 +122,12 @@ func WithCapabilityChain(chain ...interface{}) CapabilityOption {
 	}
 }
 
-// WithDocumentLoaderCache sets cached contexts to be used by JSON-LD context document loader.
-func WithDocumentLoaderCache(cache map[string]interface{}) CapabilityOption {
-	return func(o *CapabilityOptions) {
-		o.DocumentLoaderCache = cache
-	}
-}
-
 // Signer signs the Capability.
 type Signer struct {
 	ariessigner.SignatureSuite
 	SuiteType          string
 	VerificationMethod string
+	ProcessorOpts      []jsonld.ProcessorOpts
 }
 
 // NewCapability constructs a new, signed Capability with the options provided.
@@ -197,7 +190,7 @@ func signZCAP(zcap *Capability, signer *Signer, options *CapabilityOptions) erro
 			CapabilityChain:         options.CapabilityChain,
 		},
 		raw,
-		jsonld.WithDocumentLoaderCache(options.DocumentLoaderCache),
+		signer.ProcessorOpts...,
 	)
 	if err != nil {
 		return fmt.Errorf("document signer failed to sign zcap: %w", err)
