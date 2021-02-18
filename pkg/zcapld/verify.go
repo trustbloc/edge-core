@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/jsonld"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/verifier"
@@ -126,7 +127,7 @@ func (v *Verifier) Verify(proof *Proof, invocation *CapabilityInvocation) error 
 	return nil
 }
 
-// nolint:funlen,gocyclo // TODO decompose verifyCapabilityChain into smaller units
+// nolint:funlen,gocyclo,gocognit // TODO decompose verifyCapabilityChain into smaller units
 func (v *Verifier) verifyCapabilityChain(
 	capability *Capability, intendedAction string, invocation *CapabilityInvocation) error {
 	// 1.1. Ensure `capabilityAction`, if given, is allowed; if the capability
@@ -193,7 +194,14 @@ func (v *Verifier) verifyCapabilityChain(
 	}
 
 	// 4.2. Ensure that the caveats are met on the root capability.
-	// TODO verify caveats
+	for i := range capability.Caveats {
+		if capability.Caveats[i].Type == CaveatTypeExpiry {
+			err = v.verifyCaveatExpiry(capability, capability.Caveats[i].Duration)
+			if err != nil {
+				return fmt.Errorf("verify caveat expiry: %w", err)
+			}
+		}
+	}
 
 	// TODO verify expiry on root capability
 
@@ -216,6 +224,28 @@ func (v *Verifier) verifyCapabilityChain(
 	err = v.verifyCapabilityChainAttenuation(root, capability, capabilityChain)
 	if err != nil {
 		return fmt.Errorf("failed to verify capabilityChain attenuation: %w", err)
+	}
+
+	return nil
+}
+
+func (v *Verifier) verifyCaveatExpiry(capability *Capability, duration uint64) error {
+	if len(capability.Proof) == 0 {
+		return errors.New("proof is absent")
+	}
+
+	created, ok := capability.Proof[0]["created"].(string)
+	if !ok {
+		return errors.New("created time is not a string")
+	}
+
+	createdTime, err := time.Parse(time.RFC3339Nano, created)
+	if err != nil {
+		return fmt.Errorf("time parse: %w", err)
+	}
+
+	if time.Now().Unix() > createdTime.Unix()+int64(duration) {
+		return errors.New("token expired")
 	}
 
 	return nil

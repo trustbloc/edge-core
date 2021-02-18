@@ -48,6 +48,7 @@ type Capability struct {
 	Parent           string             `json:"parentCapability,omitempty"`
 	AllowedAction    []string           `json:"allowedAction,omitempty"`
 	InvocationTarget InvocationTarget   `json:"invocationTarget"`
+	Caveats          []Caveat           `json:"caveats"`
 	Proof            []verifiable.Proof `json:"proof,omitempty"`
 }
 

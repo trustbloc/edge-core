@@ -36,6 +36,12 @@ func TestParseCapability(t *testing.T) {
 				ID:   uuid.New().String(),
 				Type: "urn:edv:document",
 			},
+			Caveats: []zcapld.Caveat{
+				{
+					Type:     zcapld.CaveatTypeExpiry,
+					Duration: 100,
+				},
+			},
 			Proof: []verifiable.Proof{{
 				"type":               "Ed25519Signature2018",
 				"created":            "2020-10-07T21:59:06Z",
@@ -66,6 +72,12 @@ func TestNewCapability(t *testing.T) {
 			Delegator:     uuid.New().String(),
 			Parent:        uuid.New().String(),
 			AllowedAction: []string{uuid.New().String()},
+			Caveats: []zcapld.Caveat{
+				{
+					Type:     zcapld.CaveatTypeExpiry,
+					Duration: 100,
+				},
+			},
 			InvocationTarget: zcapld.InvocationTarget{
 				ID:   uuid.New().String(),
 				Type: uuid.New().String(),
@@ -89,6 +101,7 @@ func TestNewCapability(t *testing.T) {
 			zcapld.WithController(expected.Controller),
 			zcapld.WithDelegator(expected.Delegator),
 			zcapld.WithAllowedActions(expected.AllowedAction...),
+			zcapld.WithCaveats(expected.Caveats...),
 			zcapld.WithInvocationTarget(expected.InvocationTarget.ID, expected.InvocationTarget.Type),
 			zcapld.WithChallenge(challenge),
 			zcapld.WithDomain(domain),
