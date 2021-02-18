@@ -182,6 +182,116 @@ func TestVerifier_Verify(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("success: with caveats", func(t *testing.T) {
+		root, rootSigner := selfSignedRootCapability(t, kms.ED25519, ed25519signature2018.SignatureType)
+		capability := capability(t,
+			rootSigner, ed25519signature2018.SignatureType,
+			withParent(root.ID), withVerMethod(keyID(rootSigner)),
+			withCapabilityChain([]interface{}{root.ID}),
+			withCaveats(zcapld.Caveat{Type: zcapld.CaveatTypeExpiry, Duration: 100}),
+		)
+		invocation := invocation(capability.ID, expectRootCapability(root.ID))
+		verifier := verifier(t,
+			zcapld.SimpleCapabilityResolver{root.ID: root},
+			zcapld.SimpleKeyResolver{
+				keyID(rootSigner): keyValue(t, rootSigner),
+			},
+		)
+		err := verifier.Verify(
+			&zcapld.Proof{
+				Capability:         capability,
+				CapabilityAction:   "read",
+				VerificationMethod: capability.ID,
+			},
+			invocation,
+		)
+		require.NoError(t, err)
+	})
+
+	t.Run("error: token expired", func(t *testing.T) {
+		root, rootSigner := selfSignedRootCapability(t, kms.ED25519, ed25519signature2018.SignatureType)
+		capability := capability(t,
+			rootSigner, ed25519signature2018.SignatureType,
+			withParent(root.ID), withVerMethod(keyID(rootSigner)),
+			withCapabilityChain([]interface{}{root.ID}),
+			withCaveats(zcapld.Caveat{Type: zcapld.CaveatTypeExpiry, Duration: 0}),
+		)
+		capability.Proof[0]["created"] = time.Now().Add(-time.Second).Format(time.RFC3339Nano)
+		invocation := invocation(capability.ID, expectRootCapability(root.ID))
+		verifier := verifier(t,
+			zcapld.SimpleCapabilityResolver{root.ID: root},
+			zcapld.SimpleKeyResolver{
+				keyID(rootSigner): keyValue(t, rootSigner),
+			},
+		)
+		err := verifier.Verify(
+			&zcapld.Proof{
+				Capability:         capability,
+				CapabilityAction:   "read",
+				VerificationMethod: capability.ID,
+			},
+			invocation,
+		)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "verify caveat expiry: token expired")
+	})
+
+	t.Run("error: caveat expiry (invalid time)", func(t *testing.T) {
+		root, rootSigner := selfSignedRootCapability(t, kms.ED25519, ed25519signature2018.SignatureType)
+		capability := capability(t,
+			rootSigner, ed25519signature2018.SignatureType,
+			withParent(root.ID), withVerMethod(keyID(rootSigner)),
+			withCapabilityChain([]interface{}{root.ID}),
+			withCaveats(zcapld.Caveat{Type: zcapld.CaveatTypeExpiry, Duration: 100}),
+		)
+		capability.Proof[0]["created"] = ""
+		invocation := invocation(capability.ID, expectRootCapability(root.ID))
+		verifier := verifier(t,
+			zcapld.SimpleCapabilityResolver{root.ID: root},
+			zcapld.SimpleKeyResolver{
+				keyID(rootSigner): keyValue(t, rootSigner),
+			},
+		)
+		err := verifier.Verify(
+			&zcapld.Proof{
+				Capability:         capability,
+				CapabilityAction:   "read",
+				VerificationMethod: capability.ID,
+			},
+			invocation,
+		)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "verify caveat expiry: time parse")
+	})
+
+	t.Run("error: caveat expiry (time is not a string", func(t *testing.T) {
+		root, rootSigner := selfSignedRootCapability(t, kms.ED25519, ed25519signature2018.SignatureType)
+		capability := capability(t,
+			rootSigner, ed25519signature2018.SignatureType,
+			withParent(root.ID), withVerMethod(keyID(rootSigner)),
+			withCapabilityChain([]interface{}{root.ID}),
+			withCaveats(zcapld.Caveat{Type: zcapld.CaveatTypeExpiry, Duration: 100}),
+		)
+		capability.Proof[0]["created"] = 100
+		invocation := invocation(capability.ID, expectRootCapability(root.ID))
+		verifier := verifier(t,
+			zcapld.SimpleCapabilityResolver{root.ID: root},
+			zcapld.SimpleKeyResolver{
+				keyID(rootSigner): keyValue(t, rootSigner),
+			},
+		)
+		err := verifier.Verify(
+			&zcapld.Proof{
+				Capability:         capability,
+				CapabilityAction:   "read",
+				VerificationMethod: capability.ID,
+			},
+			invocation,
+		)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "verify caveat expiry: created time is not a string")
+	})
+
 	t.Run("error: invalid signature", func(t *testing.T) {
 		root, rootSigner := selfSignedRootCapability(t, kms.ED25519, ed25519signature2018.SignatureType)
 		wrongSigner := testSigner(t, kms.ED25519)
@@ -543,6 +653,7 @@ type zcapOptions struct {
 	proofPurpose       string
 	delegator          string
 	invocationTarget   string
+	caveats            []zcapld.Caveat
 }
 
 type zcapOption func(*zcapOptions)
@@ -601,6 +712,12 @@ func withInvocationTarget(t string) zcapOption {
 	}
 }
 
+func withCaveats(caveats ...zcapld.Caveat) zcapOption {
+	return func(o *zcapOptions) {
+		o.caveats = caveats
+	}
+}
+
 func capability(t *testing.T, sig verifiable.Signer, sigSuite string, options ...zcapOption) *zcapld.Capability {
 	opts := &zcapOptions{
 		id:               fmt.Sprintf("urn:zcap:%s", uuid.New().String()),
@@ -630,6 +747,7 @@ func capability(t *testing.T, sig verifiable.Signer, sigSuite string, options ..
 		Parent:        opts.parent,
 		Controller:    opts.controller,
 		Delegator:     opts.delegator,
+		Caveats:       opts.caveats,
 		AllowedAction: []string{"read", "write"},
 		InvocationTarget: zcapld.InvocationTarget{
 			ID:   opts.invocationTarget,

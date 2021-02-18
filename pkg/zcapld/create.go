@@ -44,6 +44,19 @@ type CapabilityOptions struct {
 	Challenge        string
 	Domain           string
 	CapabilityChain  []interface{}
+	Caveats          []Caveat
+}
+
+// Caveat types.
+const (
+	CaveatTypeExpiry = "expiry"
+)
+
+// Caveat is a restriction on how capability may be used.
+//  TODO need to generalize this mechanism to support different caveat types.
+type Caveat struct {
+	Type     string `json:"type"`
+	Duration uint64 `json:"duration"`
 }
 
 // CapabilityOption configures CapabilityOptions.
@@ -88,6 +101,13 @@ func WithDelegator(d string) CapabilityOption {
 func WithAllowedActions(actions ...string) CapabilityOption {
 	return func(o *CapabilityOptions) {
 		o.AllowedAction = actions
+	}
+}
+
+// WithCaveats sets the caveats allowed by the Capability.
+func WithCaveats(caveats ...Caveat) CapabilityOption {
+	return func(o *CapabilityOptions) {
+		o.Caveats = caveats
 	}
 }
 
@@ -153,6 +173,7 @@ func NewCapability(signer *Signer, options ...CapabilityOption) (*Capability, er
 		Parent:           opts.Parent,
 		AllowedAction:    opts.AllowedAction,
 		InvocationTarget: opts.InvocationTarget,
+		Caveats:          opts.Caveats,
 	}
 
 	err := signZCAP(zcap, signer, opts)
