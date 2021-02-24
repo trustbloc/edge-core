@@ -84,7 +84,7 @@ func TestNewHTTPSigAuthorizationHandler(t *testing.T) {
 		zcapld.NewHTTPSigAuthHandler(
 			&zcapld.HTTPSigAuthConfig{
 				CapabilityResolver: zcapld.SimpleCapabilityResolver{resourceOwnerZCAP.ID: resourceOwnerZCAP},
-				KeyResolver:        &zcapld.DIDKeyResolver{},
+				KeyResolver:        zcapld.NewDIDKeyResolver(nil),
 				VerifierOptions: []zcapld.VerificationOption{
 					zcapld.WithSignatureSuites(
 						ed25519signature2018.New(suite.WithVerifier(ed25519signature2018.NewPublicKeyVerifier())),
@@ -1249,7 +1249,7 @@ func TestNewHTTPSigAuthorizationHandler(t *testing.T) {
 						serverZCAP.ID: serverZCAP,
 						clientZCAP.ID: clientZCAP,
 					},
-					KeyResolver: &zcapld.DIDKeyResolver{},
+					KeyResolver: zcapld.NewDIDKeyResolver(nil),
 					VerifierOptions: []zcapld.VerificationOption{
 						zcapld.WithSignatureSuites(
 							ed25519signature2018.New(suite.WithVerifier(ed25519signature2018.NewPublicKeyVerifier())),
@@ -1360,7 +1360,7 @@ func TestNewHTTPSigAuthorizationHandler(t *testing.T) {
 						serverZCAP.ID: serverZCAP,
 						clientZCAP.ID: clientZCAP,
 					},
-					KeyResolver: &zcapld.DIDKeyResolver{},
+					KeyResolver: zcapld.NewDIDKeyResolver(nil),
 					VerifierOptions: []zcapld.VerificationOption{
 						zcapld.WithSignatureSuites(
 							ed25519signature2018.New(suite.WithVerifier(ed25519signature2018.NewPublicKeyVerifier())),
@@ -1472,7 +1472,7 @@ func TestNewHTTPSigAuthorizationHandler(t *testing.T) {
 						serverZCAP.ID: serverZCAP,
 						clientZCAP.ID: clientZCAP,
 					},
-					KeyResolver: &zcapld.DIDKeyResolver{},
+					KeyResolver: zcapld.NewDIDKeyResolver(nil),
 					VerifierOptions: []zcapld.VerificationOption{
 						zcapld.WithSignatureSuites(
 							ed25519signature2018.New(suite.WithVerifier(ed25519signature2018.NewPublicKeyVerifier())),
@@ -1621,7 +1621,7 @@ func TestNewHTTPSigAuthorizationHandler(t *testing.T) {
 						thirdPartyZCAP.ID:  thirdPartyZCAP,
 						fourthPartyZCAP.ID: fourthPartyZCAP,
 					},
-					KeyResolver: &zcapld.DIDKeyResolver{},
+					KeyResolver: zcapld.NewDIDKeyResolver(nil),
 					VerifierOptions: []zcapld.VerificationOption{
 						zcapld.WithSignatureSuites(
 							ed25519signature2018.New(suite.WithVerifier(ed25519signature2018.NewPublicKeyVerifier())),

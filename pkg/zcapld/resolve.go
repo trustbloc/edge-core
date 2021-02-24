@@ -12,7 +12,9 @@ import (
 
 	"github.com/hyperledger/aries-framework-go/pkg/doc/did"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/verifier"
-	didkey "github.com/hyperledger/aries-framework-go/pkg/vdr/key"
+	"github.com/hyperledger/aries-framework-go/pkg/kms"
+	"github.com/hyperledger/aries-framework-go/pkg/vdr"
+	vdrkey "github.com/hyperledger/aries-framework-go/pkg/vdr/key"
 )
 
 // KeyResolver resolves verification keys.
@@ -51,8 +53,24 @@ func (s SimpleKeyResolver) Resolve(keyID string) (*verifier.PublicKey, error) {
 	return key, nil
 }
 
+type dummyProvider struct{}
+
+func (dummyProvider) KMS() kms.KeyManager {
+	return nil
+}
+
+// NewDIDKeyResolver creates new DID resolver.
+func NewDIDKeyResolver(v VDRResolver) *DIDKeyResolver {
+	if v != nil {
+		return &DIDKeyResolver{VDR: v}
+	}
+
+	return &DIDKeyResolver{VDR: vdr.New(dummyProvider{}, vdr.WithVDR(vdrkey.New()))}
+}
+
 // DIDKeyResolver resolves verification keys from did:key URLs: https://w3c-ccg.github.io/did-method-key/.
 type DIDKeyResolver struct {
+	VDR VDRResolver
 }
 
 // Resolve expects 'didKeyURL' to be a did:key URL.
@@ -65,7 +83,7 @@ func (d *DIDKeyResolver) Resolve(didKeyURL string) (*verifier.PublicKey, error) 
 		return nil, fmt.Errorf("not a did:key URL: %s", didKeyURL)
 	}
 
-	docResolution, err := didkey.New().Read(parts[0])
+	docResolution, err := d.VDR.Resolve(parts[0])
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url %s: %w", parts[0], err)
 	}
