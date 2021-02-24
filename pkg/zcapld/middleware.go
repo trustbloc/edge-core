@@ -15,6 +15,8 @@ import (
 	"strings"
 
 	"github.com/hyperledger/aries-framework-go/pkg/crypto"
+	"github.com/hyperledger/aries-framework-go/pkg/doc/did"
+	"github.com/hyperledger/aries-framework-go/pkg/framework/aries/api/vdr"
 	"github.com/hyperledger/aries-framework-go/pkg/kms"
 	"github.com/hyperledger/aries-framework-go/pkg/kms/localkms"
 	httpsig "github.com/igor-pavlenko/httpsignatures-go"
@@ -31,10 +33,16 @@ const (
 
 const ariesDIDKeyCustomHTTPSigAlgorithm = "https://github.com/hyperledger/aries-framework-go/zcaps"
 
+// VDRResolver represents VDR resolver.
+type VDRResolver interface {
+	Resolve(did string, opts ...vdr.ResolveOption) (*did.DocResolution, error)
+}
+
 // HTTPSigAuthConfig configures the HTTP auth handler.
 type HTTPSigAuthConfig struct {
 	CapabilityResolver CapabilityResolver
 	KeyResolver        KeyResolver
+	VDRResolver        VDRResolver
 	VerifierOptions    []VerificationOption
 	Secrets            httpsig.Secrets
 	ErrConsumer        func(error)
@@ -66,8 +74,9 @@ func (a *AriesDIDKeySecrets) Get(keyID string) (httpsig.Secret, error) {
 // the aries framework's KMS and Crypto apis, and designed to work with did:key.
 // Based on workaround suggested by library authors here: https://github.com/igor-pavlenko/httpsignatures-go/issues/5.
 type AriesDIDKeySignatureHashAlgorithm struct {
-	Crypto crypto.Crypto
-	KMS    kms.KeyManager
+	Crypto   crypto.Crypto
+	KMS      kms.KeyManager
+	Resolver VDRResolver
 }
 
 // Algorithm returns this algorithm's name.
@@ -77,7 +86,7 @@ func (a *AriesDIDKeySignatureHashAlgorithm) Algorithm() string {
 
 // Create signs data with the secret.
 func (a *AriesDIDKeySignatureHashAlgorithm) Create(secret httpsig.Secret, data []byte) ([]byte, error) {
-	key, err := (&DIDKeyResolver{}).Resolve(secret.KeyID)
+	key, err := NewDIDKeyResolver(a.Resolver).Resolve(secret.KeyID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve did:key URL %s: %w", secret.KeyID, err)
 	}
@@ -104,7 +113,7 @@ func (a *AriesDIDKeySignatureHashAlgorithm) Create(secret httpsig.Secret, data [
 
 // Verify verifies the signature over data with the secret.
 func (a *AriesDIDKeySignatureHashAlgorithm) Verify(secret httpsig.Secret, data, signature []byte) error {
-	key, err := (&DIDKeyResolver{}).Resolve(secret.KeyID)
+	key, err := NewDIDKeyResolver(a.Resolver).Resolve(secret.KeyID)
 	if err != nil {
 		return fmt.Errorf("failed to resolve did:key URL %s: %w", secret.KeyID, err)
 	}
@@ -198,8 +207,9 @@ func httpSig(config *HTTPSigAuthConfig) *httpsig.HTTPSignatures {
 	})
 
 	hs.SetSignatureHashAlgorithm(&AriesDIDKeySignatureHashAlgorithm{
-		Crypto: config.Crypto,
-		KMS:    config.KMS,
+		Crypto:   config.Crypto,
+		KMS:      config.KMS,
+		Resolver: config.VDRResolver,
 	})
 
 	return hs

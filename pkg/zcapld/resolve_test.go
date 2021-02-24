@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/jose"
 	ariesver "github.com/hyperledger/aries-framework-go/pkg/doc/signature/verifier"
+	"github.com/hyperledger/aries-framework-go/pkg/vdr"
+	vdrkey "github.com/hyperledger/aries-framework-go/pkg/vdr/key"
 	"github.com/stretchr/testify/require"
 
 	"github.com/trustbloc/edge-core/pkg/zcapld"
@@ -43,7 +45,7 @@ func TestDIDKeyResolver_Resolve(t *testing.T) {
 	t.Run("resolves a verification key from a did:key URL", func(t *testing.T) {
 		didKeyURL := "did:key:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH#" +
 			"z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH"
-		r := &zcapld.DIDKeyResolver{}
+		r := zcapld.NewDIDKeyResolver(vdr.New(newAgent(t), vdr.WithVDR(vdrkey.New())))
 		result, err := r.Resolve(didKeyURL)
 		require.NoError(t, err)
 		require.Equal(t, "Ed25519VerificationKey2018", result.Type)
@@ -59,7 +61,7 @@ func TestDIDKeyResolver_Resolve(t *testing.T) {
 	t.Run("fails if referenced key is not in the did:key doc", func(t *testing.T) {
 		// fragment references a non-existent identifier
 		didKeyURL := "did:key:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH#INEXISTENT"
-		r := &zcapld.DIDKeyResolver{}
+		r := zcapld.NewDIDKeyResolver(nil)
 		_, err := r.Resolve(didKeyURL)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "did:key URL does not reference a key contained in itself")
@@ -68,7 +70,7 @@ func TestDIDKeyResolver_Resolve(t *testing.T) {
 	t.Run("fails if DID url is not of method 'key'", func(t *testing.T) {
 		url := "did:WRONG:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH#" +
 			"z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH"
-		_, err := (&zcapld.DIDKeyResolver{}).Resolve(url)
+		_, err := zcapld.NewDIDKeyResolver(nil).Resolve(url)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to parse url")
 	})

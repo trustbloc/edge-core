@@ -36,7 +36,7 @@ func TestE2E(t *testing.T) {
 	// verify zcap with a did:key URL as verificationMethod
 	verifier, err := zcapld.NewVerifier(
 		zcapld.SimpleCapabilityResolver{zcap.ID: zcap},
-		&zcapld.DIDKeyResolver{},
+		zcapld.NewDIDKeyResolver(nil),
 		zcapld.WithLDDocumentLoaders(testLDDocumentLoader),
 		zcapld.WithSignatureSuites(
 			ed25519signature2018.New(suite.WithVerifier(ed25519signature2018.NewPublicKeyVerifier())),
