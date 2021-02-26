@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/suite"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/suite/ed25519signature2018"
+	"github.com/hyperledger/aries-framework-go/pkg/doc/verifiable"
 	"github.com/hyperledger/aries-framework-go/pkg/mock/crypto"
 	mockkms "github.com/hyperledger/aries-framework-go/pkg/mock/kms"
 	"github.com/igor-pavlenko/httpsignatures-go"
@@ -1716,5 +1717,20 @@ func TestAriesDIDKeySignatureHashAlgorithm_Verify(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to verify signature")
 		require.True(t, errors.Is(err, expected))
+	})
+}
+
+func TestCompressZCAP(t *testing.T) {
+	t.Run("Marshal error", func(t *testing.T) {
+		_, err := zcapld.CompressZCAP(&zcapld.Capability{
+			Proof: []verifiable.Proof{{"key": make(chan int64)}},
+		})
+		require.EqualError(t, err, "json: unsupported type: chan int64")
+	})
+
+	t.Run("Success", func(t *testing.T) {
+		res, err := zcapld.CompressZCAP(&zcapld.Capability{})
+		require.NoError(t, err)
+		require.NotEmpty(t, res)
 	})
 }

@@ -7,10 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package zcapld_test
 
 import (
-	"bytes"
-	"compress/gzip"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -133,18 +129,10 @@ func addJSONLDCachedContext(loader *ld.CachingDocumentLoader, contextURL, contex
 }
 
 func compressZCAP(t *testing.T, zcap *zcapld.Capability) string {
-	raw, err := json.Marshal(zcap)
+	t.Helper()
+
+	res, err := zcapld.CompressZCAP(zcap)
 	require.NoError(t, err)
 
-	compressed := bytes.NewBuffer(nil)
-
-	w := gzip.NewWriter(compressed)
-
-	_, err = w.Write(raw)
-	require.NoError(t, err)
-
-	err = w.Close()
-	require.NoError(t, err)
-
-	return base64.URLEncoding.EncodeToString(compressed.Bytes())
+	return res
 }

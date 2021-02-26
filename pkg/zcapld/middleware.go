@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -296,7 +297,7 @@ func parseInvocation(invocation string) (*Capability, string, error) {
 				return nil, "", fmt.Errorf("'capability' invocation header param value is not a quoted-string: %w", err)
 			}
 
-			zcap, err = parseCapability(str)
+			zcap, err = DecompressZCAP(str)
 			if err != nil {
 				return nil, "", fmt.Errorf("failed to parse capability invocation header param value: %w", err)
 			}
@@ -321,7 +322,8 @@ func parseQuotedString(value string) (string, error) {
 	return strings.TrimSuffix(strings.TrimPrefix(value, `"`), `"`), nil
 }
 
-func parseCapability(value string) (zcap *Capability, err error) {
+// DecompressZCAP uncompresses base64 encoded string into capability.
+func DecompressZCAP(value string) (zcap *Capability, err error) {
 	decoded, err := base64.URLEncoding.DecodeString(value)
 	if err != nil {
 		return nil, fmt.Errorf("failed to base64URL-decode value %s: %w", value, err)
@@ -356,6 +358,30 @@ func parseCapability(value string) (zcap *Capability, err error) {
 	}
 
 	return zcap, err
+}
+
+// CompressZCAP compresses capability into base64 encoded string.
+func CompressZCAP(zcap *Capability) (string, error) {
+	raw, err := json.Marshal(zcap)
+	if err != nil {
+		return "", err
+	}
+
+	compressed := bytes.NewBuffer(nil)
+
+	w := gzip.NewWriter(compressed)
+
+	_, err = w.Write(raw)
+	if err != nil {
+		return "", err
+	}
+
+	err = w.Close()
+	if err != nil {
+		return "", err
+	}
+
+	return base64.URLEncoding.EncodeToString(compressed.Bytes()), nil
 }
 
 // TODO refactor this algorithm: https://github.com/trustbloc/edge-core/issues/104.
