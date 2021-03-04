@@ -13,7 +13,7 @@ require (
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/google/uuid v1.1.2
 	github.com/hashicorp/vault v1.2.1-0.20200911125421-dba37adcb55a
-	github.com/hyperledger/aries-framework-go v0.1.6-0.20210301162042-93c9922aa4cf
+	github.com/hyperledger/aries-framework-go v0.1.6-0.20210304143139-eb97711ddc73
 	github.com/igor-pavlenko/httpsignatures-go v0.0.21
 	github.com/piprate/json-gold v0.3.1-0.20201222165305-f4ce31c02ca3
 	github.com/spf13/cobra v0.0.6
