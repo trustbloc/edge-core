@@ -9,7 +9,7 @@ go 1.15
 require (
 	github.com/google/uuid v1.1.2
 	github.com/hashicorp/vault v1.2.1-0.20200911125421-dba37adcb55a
-	github.com/hyperledger/aries-framework-go v0.1.7-0.20210309194318-4af086657951
+	github.com/hyperledger/aries-framework-go v0.1.7-0.20210310014234-cfa8c6d6e2f4
 	github.com/igor-pavlenko/httpsignatures-go v0.0.21
 	github.com/piprate/json-gold v0.4.0
 	github.com/spf13/cobra v0.0.6

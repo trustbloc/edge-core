@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/hyperledger/aries-framework-go/pkg/doc/jose"
+	"github.com/hyperledger/aries-framework-go/pkg/doc/jsonld"
 	ariesver "github.com/hyperledger/aries-framework-go/pkg/doc/signature/verifier"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/util/signature"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/verifiable"
@@ -84,7 +85,7 @@ func keyValue(t *testing.T, sigSigner signature.Signer) *ariesver.PublicKey {
 	}
 }
 
-func createTestJSONLDDocumentLoader() *ld.CachingDocumentLoader {
+func createTestJSONLDDocumentLoader() *jsonld.CachingDocumentLoader {
 	loader := verifiable.CachingJSONLDLoader()
 
 	contexts := []struct {
@@ -108,7 +109,7 @@ func createTestJSONLDDocumentLoader() *ld.CachingDocumentLoader {
 	return loader
 }
 
-func addJSONLDCachedContextFromFile(loader *ld.CachingDocumentLoader, contextURL, contextFile string) {
+func addJSONLDCachedContextFromFile(loader *jsonld.CachingDocumentLoader, contextURL, contextFile string) {
 	contextContent, err := ioutil.ReadFile( // nolint:gosec // contextFiles are safely set by test params above
 		filepath.Join(filepath.Clean("testdata/context"), contextFile),
 	)
@@ -119,7 +120,7 @@ func addJSONLDCachedContextFromFile(loader *ld.CachingDocumentLoader, contextURL
 	addJSONLDCachedContext(loader, contextURL, string(contextContent))
 }
 
-func addJSONLDCachedContext(loader *ld.CachingDocumentLoader, contextURL, contextContent string) {
+func addJSONLDCachedContext(loader *jsonld.CachingDocumentLoader, contextURL, contextContent string) {
 	reader, err := ld.DocumentFromReader(strings.NewReader(contextContent))
 	if err != nil {
 		panic(err)
