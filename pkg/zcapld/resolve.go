@@ -12,7 +12,6 @@ import (
 
 	"github.com/hyperledger/aries-framework-go/pkg/doc/did"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/verifier"
-	"github.com/hyperledger/aries-framework-go/pkg/kms"
 	"github.com/hyperledger/aries-framework-go/pkg/vdr"
 	vdrkey "github.com/hyperledger/aries-framework-go/pkg/vdr/key"
 )
@@ -53,19 +52,13 @@ func (s SimpleKeyResolver) Resolve(keyID string) (*verifier.PublicKey, error) {
 	return key, nil
 }
 
-type dummyProvider struct{}
-
-func (dummyProvider) KMS() kms.KeyManager {
-	return nil
-}
-
 // NewDIDKeyResolver creates new DID resolver.
 func NewDIDKeyResolver(v VDRResolver) *DIDKeyResolver {
 	if v != nil {
 		return &DIDKeyResolver{VDR: v}
 	}
 
-	return &DIDKeyResolver{VDR: vdr.New(dummyProvider{}, vdr.WithVDR(vdrkey.New()))}
+	return &DIDKeyResolver{VDR: vdr.New(vdr.WithVDR(vdrkey.New()))}
 }
 
 // DIDKeyResolver resolves verification keys from did:key URLs: https://w3c-ccg.github.io/did-method-key/.
