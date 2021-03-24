@@ -45,7 +45,7 @@ func TestDIDKeyResolver_Resolve(t *testing.T) {
 	t.Run("resolves a verification key from a did:key URL", func(t *testing.T) {
 		didKeyURL := "did:key:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH#" +
 			"z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH"
-		r := zcapld.NewDIDKeyResolver(vdr.New(newAgent(t), vdr.WithVDR(vdrkey.New())))
+		r := zcapld.NewDIDKeyResolver(vdr.New(vdr.WithVDR(vdrkey.New())))
 		result, err := r.Resolve(didKeyURL)
 		require.NoError(t, err)
 		require.Equal(t, "Ed25519VerificationKey2018", result.Type)
