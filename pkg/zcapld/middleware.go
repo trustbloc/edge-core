@@ -36,7 +36,7 @@ const ariesDIDKeyCustomHTTPSigAlgorithm = "https://github.com/hyperledger/aries-
 
 // VDRResolver represents VDR resolver.
 type VDRResolver interface {
-	Resolve(did string, opts ...vdr.ResolveOption) (*did.DocResolution, error)
+	Resolve(did string, opts ...vdr.DIDMethodOption) (*did.DocResolution, error)
 }
 
 // HTTPSigAuthConfig configures the HTTP auth handler.
