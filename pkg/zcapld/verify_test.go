@@ -619,6 +619,8 @@ func verifier(t *testing.T, r zcapld.CapabilityResolver, k zcapld.KeyResolver) *
 
 func selfSignedSelfInvokingRootCapability(t *testing.T,
 	keyType kms.KeyType, signatureSuite string) (*zcapld.Capability, signature.Signer) {
+	t.Helper()
+
 	capID := fmt.Sprintf("did:key:%s", uuid.New().String())
 	sig := testSigner(t, keyType)
 
@@ -632,6 +634,8 @@ func selfSignedSelfInvokingRootCapability(t *testing.T,
 
 func selfSignedRootCapability(t *testing.T,
 	keyType kms.KeyType, signatureSuite string) (*zcapld.Capability, signature.Signer) {
+	t.Helper()
+
 	sig := testSigner(t, keyType)
 
 	return capability(t,
@@ -719,6 +723,8 @@ func withCaveats(caveats ...zcapld.Caveat) zcapOption {
 }
 
 func capability(t *testing.T, sig verifiable.Signer, sigSuite string, options ...zcapOption) *zcapld.Capability {
+	t.Helper()
+
 	opts := &zcapOptions{
 		id:               fmt.Sprintf("urn:zcap:%s", uuid.New().String()),
 		proofPurpose:     zcapld.ProofPurpose,
@@ -830,6 +836,8 @@ func testSigner(t *testing.T, kt kms.KeyType) signature.Signer {
 }
 
 func nonce(t *testing.T) []byte {
+	t.Helper()
+
 	n := make([]byte, 256)
 
 	_, err := rand.Reader.Read(n)
@@ -875,6 +883,8 @@ func marshal(t *testing.T, v interface{}) []byte {
 }
 
 func parseProof(t *testing.T, signedZcap []byte) []verifiable.Proof {
+	t.Helper()
+
 	rawProof := &struct {
 		Proof json.RawMessage `json:"proof,omitempty"`
 	}{}

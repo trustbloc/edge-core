@@ -70,6 +70,12 @@ linters:
     - maligned
     - prealloc
     - goerr113   # too strict and forces declaration of sentinel errors: https://github.com/Djarvur/go-err113/issues/10
+    - interfacer # deprecated by the author https://github.com/mvdan/interfacer#interfacer
+    - scopelint # deprecated by the author https://github.com/kyoh86/scopelint#obsoleted
+    - exhaustivestruct
+    - paralleltest
+    - cyclop # TODO consider replacing gocyclo with cyclop
+    - wrapcheck # TODO enable
 
 issues:
   exclude-use-default: false
@@ -82,6 +88,7 @@ issues:
   exclude:
     # Allow package logger variables (for now)
     - \`logger\` is a global variable
+    - logger is a global variable
     -  Line contains TODO/BUG/FIXME
     # Add comments for package
     -  at least one file in a package should have a package comment

@@ -35,6 +35,8 @@ var buf bytes.Buffer
 // Should only be used for tests.
 func VerifyDefaultLogging(t *testing.T,
 	logger Logger, module string, setLevel func(module string, level metadata.Level)) {
+	t.Helper()
+
 	allTestLevels := []metadata.Level{
 		metadata.ERROR,
 		metadata.DEBUG,
@@ -71,6 +73,8 @@ func VerifyDefaultLogging(t *testing.T,
 }
 
 func matchDefLogOutput(t *testing.T, module string, currentLevel, levelEnabled metadata.Level, infoEnabled bool) {
+	t.Helper()
+
 	if currentLevel > levelEnabled {
 		require.Empty(t, buf.String())
 
@@ -98,6 +102,8 @@ func matchDefLogOutput(t *testing.T, module string, currentLevel, levelEnabled m
 // VerifyCustomLogger verifies custom logging behaviour.
 // Should only be used for tests.
 func VerifyCustomLogger(t *testing.T, logger Logger, module string) {
+	t.Helper()
+
 	regex := fmt.Sprintf(customLevelOutputExpectedRegex, module)
 	allTestLevels := []metadata.Level{
 		metadata.ERROR,
@@ -133,6 +139,8 @@ func VerifyCustomLogger(t *testing.T, logger Logger, module string) {
 }
 
 func matchCustomLogOutput(t *testing.T, regex string, level, levelEnabled metadata.Level) {
+	t.Helper()
+
 	if level > levelEnabled {
 		require.Empty(t, buf.String())
 

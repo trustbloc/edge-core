@@ -30,6 +30,6 @@ type changeLogSpecReq struct { // nolint:unused,deadcode // struct used only to 
 //
 // swagger:response getLogSpecRes
 type getLogSpecRes struct { // nolint:unused,deadcode // struct used only to generate openapi spec
-	//in: body
+	// in: body
 	logSpec
 }

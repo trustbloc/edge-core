@@ -228,8 +228,7 @@ func signZCAP(zcap *Capability, signer *Signer, options *CapabilityOptions) erro
 func nonce() ([]byte, error) {
 	n := make([]byte, 64)
 
-	_, err := rand.Reader.Read(n)
-	if err != nil {
+	if _, err := rand.Reader.Read(n); err != nil {
 		return nil, fmt.Errorf("failed to read from crypto/rand: %w", err)
 	}
 
