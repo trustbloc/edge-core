@@ -75,7 +75,7 @@ func keyID(sigSigner signature.Signer) string {
 func keyValue(t *testing.T, sigSigner signature.Signer) *ariesver.PublicKey {
 	t.Helper()
 
-	jwk, err := jose.JWKFromPublicKey(sigSigner.PublicKey())
+	jwk, err := jose.JWKFromKey(sigSigner.PublicKey())
 	require.NoError(t, err)
 
 	return &ariesver.PublicKey{

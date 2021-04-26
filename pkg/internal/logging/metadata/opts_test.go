@@ -105,6 +105,8 @@ func TestCallerInfos(t *testing.T) {
 }
 
 func verifyLevels(t *testing.T, module string, enabled, disabled []metadata.Level) {
+	t.Helper()
+
 	for _, level := range enabled {
 		actual := metadata.IsEnabledFor(module, level)
 		require.True(t,

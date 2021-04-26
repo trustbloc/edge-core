@@ -109,7 +109,7 @@ func (v *Verifier) Verify(proof *Proof, invocation *CapabilityInvocation) error 
 	// Begin ControllerProofPurpose
 
 	// TODO the code here validates the proof's "created" time against an expected time:
-	//  nolint:lll // don't want to break the link in two
+	//  nolint:lll,nolintlint // don't want to break the link in two
 	//  https://github.com/digitalbazaar/jsonld-signatures/blob/8d91bcb351702dde4863fab660d7ca1e5e90b2a2/lib/purposes/ProofPurpose.js#L49-L57.
 	//  Note: the higher layers in bedrock-edv-storage don't actually set `proof.created`, so `created` is always NaN.
 	//  Do we really need to verify the proof's date at this layer though? Isn't that the responsibility of a higher

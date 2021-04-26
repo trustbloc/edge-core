@@ -140,6 +140,8 @@ func TestParseString(t *testing.T) {
 }
 
 func verifyLevels(t *testing.T, module string, enabled, disabled []Level) {
+	t.Helper()
+
 	for _, level := range enabled {
 		levelStr := metadata.ParseString(metadata.Level(level))
 		require.True(t, IsEnabledFor(module, level),

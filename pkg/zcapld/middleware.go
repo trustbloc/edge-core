@@ -60,8 +60,7 @@ type InvocationExpectations struct {
 
 // AriesDIDKeySecrets is a secrets storage that can return did:key httpsignatures.Secrets.
 // Based on workaround suggested by library authors here: https://github.com/igor-pavlenko/httpsignatures-go/issues/5.
-type AriesDIDKeySecrets struct {
-}
+type AriesDIDKeySecrets struct{}
 
 // Get returns a did:key secret.
 func (a *AriesDIDKeySecrets) Get(keyID string) (httpsig.Secret, error) {
