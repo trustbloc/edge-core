@@ -8,21 +8,17 @@ package zcapld_test
 
 import (
 	"fmt"
-	"io/ioutil"
-	"path/filepath"
-	"strings"
 	"testing"
 
+	"github.com/hyperledger/aries-framework-go/component/storageutil/mem"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/jose"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/jsonld"
 	ariesver "github.com/hyperledger/aries-framework-go/pkg/doc/signature/verifier"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/util/signature"
-	"github.com/hyperledger/aries-framework-go/pkg/doc/verifiable"
 	"github.com/hyperledger/aries-framework-go/pkg/framework/aries"
 	"github.com/hyperledger/aries-framework-go/pkg/framework/context"
 	"github.com/hyperledger/aries-framework-go/pkg/kms"
 	"github.com/hyperledger/aries-framework-go/pkg/vdr/fingerprint"
-	"github.com/piprate/json-gold/ld"
 	"github.com/stretchr/testify/require"
 
 	"github.com/trustbloc/edge-core/pkg/zcapld"
@@ -85,48 +81,13 @@ func keyValue(t *testing.T, sigSigner signature.Signer) *ariesver.PublicKey {
 	}
 }
 
-func createTestJSONLDDocumentLoader() *jsonld.CachingDocumentLoader {
-	loader := verifiable.CachingJSONLDLoader()
+func createTestJSONLDDocumentLoader(t *testing.T) *jsonld.DocumentLoader {
+	t.Helper()
 
-	contexts := []struct {
-		vocab    string
-		filename string
-	}{
-		{
-			vocab:    "https://w3id.org/security/v1",
-			filename: "w3id.org.security.v1.json",
-		},
-		{
-			vocab:    "https://w3id.org/security/v2",
-			filename: "w3id.org.security.v2.json",
-		},
-	}
-
-	for i := range contexts {
-		addJSONLDCachedContextFromFile(loader, contexts[i].vocab, contexts[i].filename)
-	}
+	loader, err := jsonld.NewDocumentLoader(mem.NewProvider())
+	require.NoError(t, err)
 
 	return loader
-}
-
-func addJSONLDCachedContextFromFile(loader *jsonld.CachingDocumentLoader, contextURL, contextFile string) {
-	contextContent, err := ioutil.ReadFile( // nolint:gosec // contextFiles are safely set by test params above
-		filepath.Join(filepath.Clean("testdata/context"), contextFile),
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	addJSONLDCachedContext(loader, contextURL, string(contextContent))
-}
-
-func addJSONLDCachedContext(loader *jsonld.CachingDocumentLoader, contextURL, contextContent string) {
-	reader, err := ld.DocumentFromReader(strings.NewReader(contextContent))
-	if err != nil {
-		panic(err)
-	}
-
-	loader.AddDocument(contextURL, reader)
 }
 
 func compressZCAP(t *testing.T, zcap *zcapld.Capability) string {

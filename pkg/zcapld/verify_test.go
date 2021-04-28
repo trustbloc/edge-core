@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hyperledger/aries-framework-go/pkg/crypto/tinkcrypto"
+	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/jsonld"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/proof"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/signer"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/suite"
@@ -33,16 +34,13 @@ import (
 	"github.com/trustbloc/edge-core/pkg/zcapld"
 )
 
-// nolint:gochecknoglobals // loading jsonld context from files only once in order to remove network dependencies.
-var testLDDocumentLoader = createTestJSONLDDocumentLoader()
-
 func TestNewVerifier(t *testing.T) {
 	t.Run("success: returns verifier", func(t *testing.T) {
 		v, err := zcapld.NewVerifier(
 			zcapld.SimpleCapabilityResolver{},
 			zcapld.SimpleKeyResolver{},
 			zcapld.WithSignatureSuites(suites()...),
-			zcapld.WithLDDocumentLoaders(testLDDocumentLoader),
+			zcapld.WithLDDocumentLoaders(createTestJSONLDDocumentLoader(t)),
 		)
 		require.NoError(t, err)
 		require.NotNil(t, v)
@@ -611,7 +609,7 @@ func verifier(t *testing.T, r zcapld.CapabilityResolver, k zcapld.KeyResolver) *
 
 	v, err := zcapld.NewVerifier(r, k,
 		zcapld.WithSignatureSuites(suites()...),
-		zcapld.WithLDDocumentLoaders(testLDDocumentLoader))
+		zcapld.WithLDDocumentLoaders(createTestJSONLDDocumentLoader(t)))
 	require.NoError(t, err)
 
 	return v
@@ -867,6 +865,7 @@ func signZcap(t *testing.T,
 			CapabilityChain:         options.capabilityChain,
 		},
 		raw,
+		jsonld.WithDocumentLoader(createTestJSONLDDocumentLoader(t)),
 	)
 	require.NoError(t, err)
 

@@ -64,6 +64,8 @@ func TestParseCapability(t *testing.T) {
 }
 
 func TestNewCapability(t *testing.T) {
+	loader := createTestJSONLDDocumentLoader(t)
+
 	t.Run("creates new capability with proof", func(t *testing.T) {
 		expected := &zcapld.Capability{
 			ID:            uuid.New().String(),
@@ -93,7 +95,7 @@ func TestNewCapability(t *testing.T) {
 				SignatureSuite:     ed25519signature2018.New(suite.WithSigner(signer)),
 				SuiteType:          ed25519signature2018.SignatureType,
 				VerificationMethod: verificationMethod,
-				ProcessorOpts:      []jsonld.ProcessorOpts{jsonld.WithDocumentLoader(testLDDocumentLoader)},
+				ProcessorOpts:      []jsonld.ProcessorOpts{jsonld.WithDocumentLoader(loader)},
 			},
 			zcapld.WithID(expected.ID),
 			zcapld.WithParent(expected.Parent),
@@ -132,6 +134,7 @@ func TestNewCapability(t *testing.T) {
 			SignatureSuite:     ed25519signature2018.New(suite.WithSigner(signer)),
 			SuiteType:          ed25519signature2018.SignatureType,
 			VerificationMethod: keyID(signer),
+			ProcessorOpts:      []jsonld.ProcessorOpts{jsonld.WithDocumentLoader(loader)},
 		})
 		require.NoError(t, err)
 		require.NotEmpty(t, result.ID)
@@ -143,6 +146,7 @@ func TestNewCapability(t *testing.T) {
 			SignatureSuite:     ed25519signature2018.New(suite.WithSigner(signer)),
 			SuiteType:          ed25519signature2018.SignatureType,
 			VerificationMethod: keyID(signer),
+			ProcessorOpts:      []jsonld.ProcessorOpts{jsonld.WithDocumentLoader(loader)},
 		})
 		require.NoError(t, err)
 		ver, err := ariesver.New(
@@ -150,7 +154,7 @@ func TestNewCapability(t *testing.T) {
 			ed25519signature2018.New(suite.WithVerifier(ed25519signature2018.NewPublicKeyVerifier())),
 		)
 		require.NoError(t, err)
-		err = ver.Verify(marshal(t, zcap), jsonld.WithDocumentLoader(testLDDocumentLoader))
+		err = ver.Verify(marshal(t, zcap), jsonld.WithDocumentLoader(createTestJSONLDDocumentLoader(t)))
 		require.NoError(t, err)
 	})
 
@@ -166,6 +170,7 @@ func TestNewCapability(t *testing.T) {
 			SignatureSuite:     ed25519signature2018.New(suite.WithSigner(signer)),
 			SuiteType:          "",
 			VerificationMethod: keyID(signer),
+			ProcessorOpts:      []jsonld.ProcessorOpts{jsonld.WithDocumentLoader(loader)},
 		})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "signature type is missing")

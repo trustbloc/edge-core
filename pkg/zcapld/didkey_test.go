@@ -9,6 +9,7 @@ package zcapld_test
 import (
 	"testing"
 
+	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/jsonld"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/suite"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/signature/suite/ed25519signature2018"
 	"github.com/hyperledger/aries-framework-go/pkg/kms"
@@ -20,6 +21,7 @@ import (
 
 func TestE2E(t *testing.T) {
 	signer := testSigner(t, kms.ED25519)
+	loader := createTestJSONLDDocumentLoader(t)
 	_, didKeyURL := fingerprint.CreateDIDKey(signer.PublicKeyBytes())
 
 	// issue new zcap with a did:key URL as verificationMethod
@@ -28,6 +30,7 @@ func TestE2E(t *testing.T) {
 			SignatureSuite:     ed25519signature2018.New(suite.WithSigner(signer)),
 			SuiteType:          ed25519signature2018.SignatureType,
 			VerificationMethod: didKeyURL,
+			ProcessorOpts:      []jsonld.ProcessorOpts{jsonld.WithDocumentLoader(loader)},
 		},
 		zcapld.WithInvoker(didKeyURL),
 	)
@@ -37,7 +40,7 @@ func TestE2E(t *testing.T) {
 	verifier, err := zcapld.NewVerifier(
 		zcapld.SimpleCapabilityResolver{zcap.ID: zcap},
 		zcapld.NewDIDKeyResolver(nil),
-		zcapld.WithLDDocumentLoaders(testLDDocumentLoader),
+		zcapld.WithLDDocumentLoaders(loader),
 		zcapld.WithSignatureSuites(
 			ed25519signature2018.New(suite.WithVerifier(ed25519signature2018.NewPublicKeyVerifier())),
 		),
