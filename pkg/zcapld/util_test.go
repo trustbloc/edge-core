@@ -10,14 +10,15 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hyperledger/aries-framework-go/component/storageutil/mem"
-	"github.com/hyperledger/aries-framework-go/pkg/doc/jose"
-	"github.com/hyperledger/aries-framework-go/pkg/doc/jsonld"
+	"github.com/hyperledger/aries-framework-go/pkg/doc/jose/jwk/jwksupport"
+	"github.com/hyperledger/aries-framework-go/pkg/doc/ld"
 	ariesver "github.com/hyperledger/aries-framework-go/pkg/doc/signature/verifier"
 	"github.com/hyperledger/aries-framework-go/pkg/doc/util/signature"
 	"github.com/hyperledger/aries-framework-go/pkg/framework/aries"
 	"github.com/hyperledger/aries-framework-go/pkg/framework/context"
 	"github.com/hyperledger/aries-framework-go/pkg/kms"
+	mockldstore "github.com/hyperledger/aries-framework-go/pkg/mock/ld"
+	ldstore "github.com/hyperledger/aries-framework-go/pkg/store/ld"
 	"github.com/hyperledger/aries-framework-go/pkg/vdr/fingerprint"
 	"github.com/stretchr/testify/require"
 
@@ -71,20 +72,38 @@ func keyID(sigSigner signature.Signer) string {
 func keyValue(t *testing.T, sigSigner signature.Signer) *ariesver.PublicKey {
 	t.Helper()
 
-	jwk, err := jose.JWKFromKey(sigSigner.PublicKey())
+	jwk, err := jwksupport.JWKFromKey(sigSigner.PublicKey())
 	require.NoError(t, err)
 
 	return &ariesver.PublicKey{
-		Type:  "JwsVerificationKey2020",
+		Type:  "JsonWebKey2020",
 		Value: sigSigner.PublicKeyBytes(),
 		JWK:   jwk,
 	}
 }
 
-func createTestJSONLDDocumentLoader(t *testing.T) *jsonld.DocumentLoader {
+type mockProvider struct {
+	ContextStore        ldstore.ContextStore
+	RemoteProviderStore ldstore.RemoteProviderStore
+}
+
+func (m *mockProvider) JSONLDContextStore() ldstore.ContextStore {
+	return m.ContextStore
+}
+
+func (m *mockProvider) JSONLDRemoteProviderStore() ldstore.RemoteProviderStore {
+	return m.RemoteProviderStore
+}
+
+func createTestJSONLDDocumentLoader(t *testing.T) *ld.DocumentLoader {
 	t.Helper()
 
-	loader, err := jsonld.NewDocumentLoader(mem.NewProvider())
+	p := &mockProvider{
+		ContextStore:        mockldstore.NewMockContextStore(),
+		RemoteProviderStore: mockldstore.NewMockRemoteProviderStore(),
+	}
+
+	loader, err := ld.NewDocumentLoader(p)
 	require.NoError(t, err)
 
 	return loader
