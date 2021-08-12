@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/hyperledger/aries-framework-go/pkg/doc/jose"
+	"github.com/hyperledger/aries-framework-go/pkg/doc/jose/jwk"
 	ariesver "github.com/hyperledger/aries-framework-go/pkg/doc/signature/verifier"
 	"github.com/hyperledger/aries-framework-go/pkg/vdr"
 	vdrkey "github.com/hyperledger/aries-framework-go/pkg/vdr/key"
@@ -24,7 +24,7 @@ func TestSimpleKeyResolver_Resolve(t *testing.T) {
 		expected := &ariesver.PublicKey{
 			Type:  uuid.New().String(),
 			Value: []byte("test bytes"),
-			JWK:   &jose.JWK{},
+			JWK:   &jwk.JWK{},
 		}
 		r := zcapld.SimpleKeyResolver{
 			"keyID": expected,
