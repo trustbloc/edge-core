@@ -139,6 +139,85 @@ func TestParseString(t *testing.T) {
 	require.Equal(t, "DEBUG", debugLogLevel)
 }
 
+func TestSetSpecLogSpecPut(t *testing.T) {
+	t.Run("Successfully set logging levels", func(t *testing.T) {
+		resetLoggingLevels()
+
+		require.NoError(t, SetSpec("module1=debug:module2=critical:error"))
+
+		require.Equal(t, DEBUG, GetLevel("module1"))
+		require.Equal(t, CRITICAL, GetLevel("module2"))
+		require.Equal(t, ERROR, GetLevel(""))
+	})
+
+	t.Run("Successfully set logging levels - no default", func(t *testing.T) {
+		resetLoggingLevels()
+
+		require.NoError(t, SetSpec("module1=debug:module2=critical"))
+
+		require.Equal(t, DEBUG, GetLevel("module1"))
+		require.Equal(t, CRITICAL, GetLevel("module2"))
+		require.Equal(t, INFO, GetLevel(""))
+	})
+
+	t.Run("Invalid log spec: default log level type is invalid", func(t *testing.T) {
+		resetLoggingLevels()
+
+		err := SetSpec("InvalidLogLevel")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid log level")
+
+		// Log levels should remain at the default setting of "info"
+		require.Equal(t, INFO, GetLevel("module1"))
+		require.Equal(t, INFO, GetLevel("module2"))
+		require.Equal(t, INFO, GetLevel(""))
+	})
+
+	t.Run("Invalid log spec: module log level type is invalid", func(t *testing.T) {
+		resetLoggingLevels()
+
+		err := SetSpec("Module1=InvalidLogLevel")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid log level")
+
+		// Log levels should remain at the default setting of "info"
+		require.Equal(t, INFO, GetLevel("module1"))
+		require.Equal(t, INFO, GetLevel("module2"))
+		require.Equal(t, INFO, GetLevel(""))
+	})
+
+	t.Run("Invalid log spec: multiple default log levels", func(t *testing.T) {
+		resetLoggingLevels()
+
+		err := SetSpec("debug:debug")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "multiple default values found")
+
+		// Log levels should remain at the default setting of "info"
+		require.Equal(t, INFO, GetLevel("module1"))
+		require.Equal(t, INFO, GetLevel("module2"))
+		require.Equal(t, INFO, GetLevel(""))
+	})
+}
+
+func TestLogSpecGet(t *testing.T) {
+	resetLoggingLevels()
+
+	spec := GetSpec()
+
+	t.Logf("Got spec: %s", spec)
+
+	require.Contains(t, spec, "module1=INFO")
+	require.Contains(t, spec, "module2=INFO")
+	require.Contains(t, spec, ":INFO")
+}
+
+func resetLoggingLevels() {
+	SetLevel("module1", INFO)
+	SetLevel("module2", INFO)
+	SetLevel("", INFO)
+}
+
 func verifyLevels(t *testing.T, module string, enabled, disabled []Level) {
 	t.Helper()
 
