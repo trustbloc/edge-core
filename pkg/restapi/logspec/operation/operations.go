@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/trustbloc/edge-core/pkg/internal/support"
 	"github.com/trustbloc/edge-core/pkg/log"
@@ -26,8 +25,6 @@ Valid log levels: critical,error,warn,info,debug
 Error: %s`
 
 	multipleDefaultValues = "multiple default values found"
-
-	getLogSpecPrepareErrMsg = "Failure while preparing log level response: %s."
 )
 
 // Handler represents an HTTP handler for each controller API endpoint.
@@ -42,11 +39,6 @@ type StringBuilder interface {
 	Write(p []byte) (int, error)
 	String() string
 	Reset()
-}
-
-type moduleLevelPair struct {
-	module   string
-	logLevel log.Level
 }
 
 type errorResponse struct {
@@ -89,7 +81,7 @@ func logSpecPutHandler(rw http.ResponseWriter, req *http.Request) {
 //    default: emptyRes
 //        200: getLogSpecRes
 func logSpecGetHandler(rw http.ResponseWriter, _ *http.Request) {
-	getLogSpec(rw, &strings.Builder{})
+	getLogSpec(rw)
 }
 
 func changeLogSpec(rw http.ResponseWriter, req *http.Request) {
@@ -102,77 +94,14 @@ func changeLogSpec(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	logLevelByModule := strings.Split(incomingLogSpec.Spec, ":")
-
-	defaultLogLevel := log.Level(-1)
-
-	var moduleLevelPairs []moduleLevelPair
-
-	for _, logLevelByModulePart := range logLevelByModule {
-		if strings.Contains(logLevelByModulePart, "=") {
-			moduleAndLevelPair := strings.Split(logLevelByModulePart, "=")
-
-			logLevel, errParse := log.ParseLevel(moduleAndLevelPair[1])
-			if errParse != nil {
-				commhttp.WriteErrorResponse(rw, http.StatusBadRequest, fmt.Sprintf(invalidLogSpec, errParse))
-
-				return
-			}
-
-			moduleLevelPairs = append(moduleLevelPairs,
-				moduleLevelPair{moduleAndLevelPair[0], logLevel})
-		} else {
-			if defaultLogLevel != -1 {
-				// The given log spec is formatted incorrectly; it contains multiple default values.
-				commhttp.WriteErrorResponse(rw, http.StatusBadRequest,
-					fmt.Sprintf(invalidLogSpec, multipleDefaultValues))
-
-				return
-			}
-			var errParse error
-
-			defaultLogLevel, errParse = log.ParseLevel(logLevelByModulePart)
-			if errParse != nil {
-				commhttp.WriteErrorResponse(rw, http.StatusBadRequest, fmt.Sprintf(invalidLogSpec, errParse))
-
-				return
-			}
-		}
-	}
-
-	if defaultLogLevel != -1 {
-		log.SetLevel("", defaultLogLevel)
-	}
-
-	for _, moduleLevelPair := range moduleLevelPairs {
-		log.SetLevel(moduleLevelPair.module, moduleLevelPair.logLevel)
-	}
-}
-
-func getLogSpec(rw http.ResponseWriter, response StringBuilder) {
-	logLevels := log.GetAllLevels()
-
-	var defaultDebugLevel string
-
-	for module, level := range logLevels {
-		if module == "" {
-			defaultDebugLevel = log.ParseString(level)
-		} else {
-			_, err := response.Write([]byte(module + "=" + log.ParseString(level) + ":"))
-			if err != nil {
-				commhttp.WriteErrorResponse(rw, http.StatusInternalServerError, fmt.Sprintf(getLogSpecPrepareErrMsg, err))
-
-				return
-			}
-		}
-	}
-
-	_, err := response.Write([]byte(defaultDebugLevel))
+	err = log.SetSpec(incomingLogSpec.Spec)
 	if err != nil {
-		commhttp.WriteErrorResponse(rw, http.StatusInternalServerError, fmt.Sprintf(getLogSpecPrepareErrMsg, err))
+		commhttp.WriteErrorResponse(rw, http.StatusBadRequest, fmt.Sprintf(invalidLogSpec, err))
 
 		return
 	}
+}
 
-	commhttp.WriteResponse(rw, logSpec{Spec: response.String()})
+func getLogSpec(rw http.ResponseWriter) {
+	commhttp.WriteResponse(rw, logSpec{Spec: log.GetSpec()})
 }

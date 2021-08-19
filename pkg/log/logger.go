@@ -7,6 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 package log
 
 import (
+	"errors"
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/trustbloc/edge-core/pkg/internal/logging/metadata"
@@ -114,6 +117,85 @@ func GetAllLevels() map[string]Level {
 	return levels
 }
 
+// SetSpec sets the log levels for individual modules as well as the default log level.
+// The format of the spec is as follows:
+//
+//	  module1=level1:module2=level2:module3=level3:defaultLevel
+//
+// Valid log levels are: critical, error, warning, info, debug
+//
+// Example:
+//    module1=error:module2=debug:module3=warning:info
+//
+func SetSpec(spec string) error {
+	logLevelByModule := strings.Split(spec, ":")
+
+	defaultLogLevel := Level(-1) //nolint:ifshort // This linter error doesn't make sense
+
+	var moduleLevelPairs []moduleLevelPair
+
+	for _, logLevelByModulePart := range logLevelByModule {
+		if strings.Contains(logLevelByModulePart, "=") {
+			moduleAndLevelPair := strings.Split(logLevelByModulePart, "=")
+
+			logLevel, err := ParseLevel(moduleAndLevelPair[1])
+			if err != nil {
+				return err
+			}
+
+			moduleLevelPairs = append(moduleLevelPairs,
+				moduleLevelPair{moduleAndLevelPair[0], logLevel})
+		} else {
+			if defaultLogLevel != -1 {
+				return errors.New("multiple default values found")
+			}
+
+			defaultLevel, err := ParseLevel(logLevelByModulePart)
+			if err != nil {
+				return err
+			}
+
+			defaultLogLevel = defaultLevel
+		}
+	}
+
+	if defaultLogLevel != -1 {
+		SetLevel("", defaultLogLevel)
+	} else {
+		SetLevel("", INFO)
+	}
+
+	for _, moduleLevelPair := range moduleLevelPairs {
+		SetLevel(moduleLevelPair.module, moduleLevelPair.logLevel)
+	}
+
+	return nil
+}
+
+// GetSpec returns the log spec which specifies the log level of each individual module. The spec is
+// in the following format:
+//
+//	  module1=level1:module2=level2:module3=level3:defaultLevel
+//
+// Example:
+//    module1=error:module2=debug:module3=warning:info
+//
+func GetSpec() string {
+	var spec string
+
+	var defaultDebugLevel string
+
+	for module, level := range GetAllLevels() {
+		if module == "" {
+			defaultDebugLevel = ParseString(level)
+		} else {
+			spec += fmt.Sprintf("%s=%s:", module, ParseString(level))
+		}
+	}
+
+	return spec + defaultDebugLevel
+}
+
 // IsEnabledFor - Check if given log level is enabled for given module
 //  Parameters:
 //  module is module name
@@ -180,4 +262,9 @@ func HideCallerInfo(module string, level Level) {
 // note: based on implementation of custom logger, callerinfo info may not be available for custom logging provider
 func IsCallerInfoEnabled(module string, level Level) bool {
 	return metadata.IsCallerInfoEnabled(module, metadata.Level(level))
+}
+
+type moduleLevelPair struct {
+	module   string
+	logLevel Level
 }

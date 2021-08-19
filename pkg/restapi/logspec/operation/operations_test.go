@@ -9,7 +9,6 @@ package operation // nolint:testpackage // references internal implementation de
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -21,27 +20,6 @@ import (
 )
 
 const testLogSpec = `{"spec":"module1=debug:module2=critical:error"}`
-
-type mockStringBuilder struct {
-	numWrites          int
-	numWritesBeforeErr int
-}
-
-func (m *mockStringBuilder) Write(p []byte) (int, error) {
-	if m.numWrites == m.numWritesBeforeErr {
-		return 0, errors.New("mockStringBuilder write failure")
-	}
-
-	m.numWrites++
-
-	return 0, nil
-}
-
-func (m *mockStringBuilder) String() string {
-	panic("implement me")
-}
-
-func (m *mockStringBuilder) Reset() {}
 
 func TestLogSpecPut(t *testing.T) {
 	t.Run("Successfully set logging levels", func(t *testing.T) {
@@ -178,24 +156,6 @@ func TestLogSpecGet(t *testing.T) {
 		gotExpectedLevels := logSpecResponse.Spec == "module1=INFO:module2=INFO:INFO" ||
 			logSpecResponse.Spec == "module2=INFO:module1=INFO:INFO"
 		require.True(t, gotExpectedLevels)
-	})
-	t.Run("Fail to write module name and level to stringBuilder", func(t *testing.T) {
-		resetLoggingLevels()
-
-		rr := httptest.NewRecorder()
-
-		getLogSpec(rr, &mockStringBuilder{})
-
-		require.Equal(t, http.StatusInternalServerError, rr.Code)
-	})
-	t.Run("Fail to write default log level to stringBuilder", func(t *testing.T) {
-		resetLoggingLevels()
-
-		rr := httptest.NewRecorder()
-
-		getLogSpec(rr, &mockStringBuilder{numWritesBeforeErr: 2})
-
-		require.Equal(t, http.StatusInternalServerError, rr.Code)
 	})
 }
 
