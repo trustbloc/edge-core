@@ -8,7 +8,7 @@ go 1.17
 
 require (
 	github.com/google/uuid v1.3.0
-	github.com/hyperledger/aries-framework-go v0.1.8-0.20220113090443-b751c0ae7b22
+	github.com/hyperledger/aries-framework-go v0.1.8-0.20220324201531-18c87667df19
 	github.com/igor-pavlenko/httpsignatures-go v0.0.23
 	github.com/piprate/json-gold v0.4.1-0.20210813112359-33b90c4ca86c
 	github.com/spf13/cobra v1.3.0
@@ -28,8 +28,8 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/google/tink/go v1.6.1-0.20210519071714-58be99b3c4d0 // indirect
-	github.com/hyperledger/aries-framework-go/component/storageutil v0.0.0-20210820175050-dcc7a225178d // indirect
-	github.com/hyperledger/aries-framework-go/spi v0.0.0-20210820175050-dcc7a225178d // indirect
+	github.com/hyperledger/aries-framework-go/component/storageutil v0.0.0-20220324201531-18c87667df19 // indirect
+	github.com/hyperledger/aries-framework-go/spi v0.0.0-20220324201531-18c87667df19 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jinzhu/copier v0.0.0-20190924061706-b57f9002281a // indirect
 	github.com/kawamuray/jsonpath v0.0.0-20201211160320-7483bafabd7e // indirect
